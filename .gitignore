@@ -1,0 +1,4 @@
+**/.vscode*
+build/*
+picosdk-c-examples*
+tmp/*
