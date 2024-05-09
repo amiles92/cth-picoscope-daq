@@ -1,6 +1,9 @@
 #include <stdio.h>
 #include <stdint.h>
 #include <stdexcept>
+#include <vector>
+#include <bitset>
+#include <string>
 
 #ifdef _WIN32
 #include "windows.h"
@@ -103,6 +106,8 @@ typedef struct tBufferInfo
 
 } BUFFER_INFO;
 
+void pp(std::string out);
+
 /****************************************************************************
 * Initialise unit' structure with Variant specific defaults
 ****************************************************************************/
@@ -118,25 +123,29 @@ void SetDefaults(UNIT *unit);
 ****************************************************************************/
 void SetVoltages(UNIT *unit, uint16_t ranges[4]);
 
+void SetNumWaveforms(UNIT *unit, uint32_t numWaveforms);
 
-void SetTimebase(UNIT *unit, uint32_t timebase, uint16_t maxChSamples);
+std::vector<std::vector<int16_t*>> SetDataBuffers(UNIT *unit, std::bitset<4> activeChannels, 
+	std::vector<uint16_t> samplesPerChannel, uint16_t samplesPreTrigger, uint32_t numWaveforms);
 
+void SetTimebase(UNIT *unit, uint8_t timebase, uint16_t maxChSamples);
 
-void SetSimpleTriggerSettings(UNIT *unit, uint16_t threshold, 
+void SetSimpleTriggerSettings(UNIT *unit, int16_t threshold, 
 		PS6000_THRESHOLD_DIRECTION dir, PS6000_CHANNEL ch);
 
+void StartRapidBlock(UNIT *unit, uint16_t preTrigger, uint16_t postTriggerMax,
+	uint8_t timebase, uint32_t numWaveforms);
 
 void disableTrigger(UNIT *unit);
 
+void SetMultiTriggerSettings(UNIT *unit, std::bitset<5> triggers, std::vector<int8_t> thresholds,
+		int8_t auxThreshold);
 
-void SetTriggerSettings(UNIT *unit, uint16_t *thresholds[5], 
-		PS6000_THRESHOLD_DIRECTION dirs[5]);
-
+void SetTriggers(UNIT *unit, std::bitset<5> triggers, std::vector<int8_t> chThreshold, int8_t auxThreshold);
 
 PICO_STATUS OpenDevice(UNIT *unit, int8_t *serial);
 
 PICO_STATUS HandleDevice(UNIT * unit);
-
 
 void CloseDevice(UNIT *unit);
 
@@ -144,9 +153,9 @@ void findUnit(UNIT *unit);
 
 void findUnit(UNIT *unit, int8_t *serial);
 
-void SetTriggers(bitset<5> triggers, vector<uint8_t> chThreshold, uint8_t auxThreshold);
+void enumUnits(int16_t *count, char* outSerials, int16_t *serialLth);
 
-void enumUnits();
+void PREF4 CallBackBlock(int16_t handle, PICO_STATUS status, void * pParameter);
 
 /****************************************************************************
 * mv_to_adc

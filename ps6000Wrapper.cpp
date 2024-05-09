@@ -6,6 +6,7 @@
 #include <vector>
 #include <sstream>
 #include <iostream>
+#include <string>
 
 #ifdef _WIN32
 #include "windows.h"
@@ -57,6 +58,12 @@ int16_t     g_autoStopped;
 int16_t     g_trig = 0;
 uint32_t	g_trigAt = 0;
 int16_t		g_overflow;
+
+
+void pp(string out)
+{
+	cout << out << endl;
+}
 
 void set_info(UNIT *unit)
 {
@@ -424,10 +431,15 @@ void SetVoltages(UNIT *unit, uint16_t ranges[4])
 	int32_t count = 0;
 	int16_t loop;
 
+	for (int i = 0; i < 4; i++)
+	{
+		pp(to_string(ranges[i]));
+	}
+
 
 	for (ch = 0; ch < unit->channelCount; ch++) 
 	{
-		assert(unit->firstRange <= ranges[ch] <= unit->lastRange);
+		assert(unit->firstRange <= (PS6000_RANGE) ranges[ch] <= unit->lastRange);
 
 		unit->channelSettings[ch].range = ranges[ch];
 
@@ -450,7 +462,7 @@ void SetVoltages(UNIT *unit, uint16_t ranges[4])
 }
 
 
-void SetTimebase(UNIT *unit, uint32_t timebase, uint16_t maxChSamples)
+void SetTimebase(UNIT *unit, uint8_t timebase, uint16_t maxChSamples) // Don't need this???
 {
     // Not foolproof, should check vs range of selected picoscope
     assert(timebase <= 5 && timebase >= 0);
@@ -462,7 +474,7 @@ void SetTimebase(UNIT *unit, uint32_t timebase, uint16_t maxChSamples)
 	
     status = ps6000GetTimebase2(unit->handle, timebase, maxChSamples, &timeInterval, 1, &maxSamples, 0);
 
-    if(status == PICO_INVALID_TIMEBASE)
+    if(status != PICO_OK)
     {
         throw invalid_argument("Invalid timebase given for this unit");
     }
@@ -474,10 +486,53 @@ void SetTimebase(UNIT *unit, uint32_t timebase, uint16_t maxChSamples)
 
 }
 
-void SetSimpleTriggerSettings(UNIT *unit, uint16_t threshold, 
+void SetNumWaveforms(UNIT *unit, uint32_t numWaveforms)
+{
+	ps6000SetNoOfCaptures(unit->handle, numWaveforms);
+	return;
+}
+
+vector<vector<int16_t*>> SetDataBuffers(UNIT *unit, bitset<4> activeChannels, 
+	vector<uint16_t> samplesPerChannel, uint16_t samplesPreTrigger, uint32_t numWaveforms)
+{//Using rapid block mode only for now
+	vector<vector<int16_t*>> outBuffers(activeChannels.count());
+
+	uint32_t maxSamples = 0;
+
+	enPS6000Channel ch = PS6000_CHANNEL_A;
+
+	for (int i = 0; i < 4; i++)
+	{
+		if (!activeChannels.test(3 - i)) {continue;}
+
+		uint16_t chSamples = samplesPreTrigger + samplesPerChannel.at(i);
+		maxSamples = max(maxSamples, (uint32_t) chSamples); 
+		outBuffers.at(i) = vector<int16_t*>(numWaveforms);
+
+		for (int j = 0; j < numWaveforms; j++)
+		{
+			outBuffers.at(i).at(j) = (int16_t*) calloc(chSamples, sizeof(int16_t));
+			if (outBuffers.at(i).at(j) == NULL)
+			{
+				cout << "Memory allocation failed: " << i << ", " << j << endl;
+			}
+			ps6000SetDataBufferBulk(unit->handle, (PS6000_CHANNEL) (ch + i),
+				outBuffers.at(i).at(j), chSamples, j, PS6000_RATIO_MODE_NONE);
+		}
+	}
+
+	uint32_t nMaxSamples = activeChannels.count() * maxSamples;
+	ps6000MemorySegments(unit->handle, numWaveforms, &nMaxSamples);
+
+	return outBuffers;
+}
+
+void SetSimpleTriggerSettings(UNIT *unit, int16_t threshold, 
 		PS6000_THRESHOLD_DIRECTION dir, PS6000_CHANNEL ch)
 {
+	disableTrigger(unit);
 
+	ps6000SetSimpleTrigger(unit->handle, 1, ch, threshold, dir, 0, 0);
 	return;
 }
 
@@ -490,12 +545,74 @@ void disableTrigger(UNIT *unit)
 	return;
 }
 
-void SetTriggerSettings(UNIT *unit, uint16_t *thresholds[5], 
-		PS6000_THRESHOLD_DIRECTION dirs[5])
-{   // NOTE: For combined simple triggers, ignores external channel
+void SetMultiTriggerSettings(UNIT *unit, bitset<5> triggers, vector<int8_t> thresholds,
+		int8_t auxThreshold)
+{   // NOTE: Ignores external channel
+	assert(thresholds.size() == 4);
+
+	throw "I haven't made this function yet: SetMultiTriggerSettings";
 
 	// RECAP FROM LAST TIME: WRITING SIMPLE ONE TRIGGER AND COMBINED SIMPLE TRIGGERS
 	// USING ARRAY OF PS6000_TRIGGER_CONDITIONS STRCTURES
+	return;
+}
+
+void SetTriggers(UNIT *unit, bitset<5> triggers, vector<int8_t> chThreshold, int8_t auxThreshold)
+{
+	assert(chThreshold.size() == 5);
+	
+	if (triggers.count() == 0)
+	{
+		throw "No set triggers";
+	}
+	if (triggers.count() == 1)
+	{
+		for (int i = 0; i < triggers.size(); i++)
+		{
+			if (triggers.test(i))
+			{
+				SetSimpleTriggerSettings(unit, chThreshold.at(i), (PS6000_THRESHOLD_DIRECTION)
+					((chThreshold.at(i) >= 0) ? PS6000_RISING : PS6000_FALLING), (PS6000_CHANNEL) (PS6000_CHANNEL_A + i));
+				break;
+			}
+		}
+	}
+	else
+	{
+		SetMultiTriggerSettings(unit, triggers, chThreshold, auxThreshold);
+	}
+	return;
+}
+
+void StartRapidBlock(UNIT *unit, uint16_t preTrigger, uint16_t postTriggerMax,
+	uint8_t timebase, uint32_t numWaveforms)
+{
+	PICO_STATUS status;
+	int32_t timeIndisposed;
+	ps6000RunBlock(unit->handle, preTrigger, postTriggerMax, timebase, 0, 
+			&timeIndisposed, 0, CallBackBlock, NULL);
+
+	g_ready = FALSE;
+
+	while (!g_ready)
+	{
+		usleep(0);
+	}
+
+	uint32_t nSamples = preTrigger + postTriggerMax;
+
+	// Get data
+	status = ps6000GetValuesBulk(unit->handle, &nSamples, 0, numWaveforms - 1, 
+			1, PS6000_RATIO_MODE_NONE, NULL);
+	
+	// ps6000GetValuesTriggerTimeOffsetBulk64
+
+	// Stop
+	status = ps6000Stop(unit->handle);
+
+	status = ps6000MemorySegments(unit->handle, 1, &nSamples);
+	status = ps6000SetNoOfCaptures(unit->handle, 1);
+
 	return;
 }
 
@@ -551,6 +668,13 @@ void CloseDevice(UNIT *unit)
 
 void findUnit(UNIT *unit, int8_t *serial)
 {
+	if (serial == NULL)
+	{
+		pp(to_string(*serial));
+		findUnit(unit);
+		return;
+	}
+
 	PICO_STATUS status = OpenDevice(unit, serial);
 
 	if (status == PICO_OK || status == PICO_USB3_0_DEVICE_NON_USB3_0_PORT)
@@ -621,40 +745,25 @@ void findUnit(UNIT *unit)
 	}
 }
 
-void SetTriggers(bitset<5> triggers, vector<uint8_t> chThreshold, uint8_t auxThreshold)
+void enumUnits(int16_t *count, char* outSerials, int16_t *serialLth)
 {
-	if (triggers.count() == 0)
-	{
-		throw "No set triggers";
-	}
-	if (triggers.count() == 1)
-	{
-		
-	}
+	PICO_STATUS ps = ps6000EnumerateUnits(count, (int8_t*) outSerials, serialLth);
+
 	return;
 }
 
-void enumUnits()
+/****************************************************************************
+* Callback
+* used by PS6000 data block collection calls, on receipt of data.
+* used to set global flags etc checked by user routines
+****************************************************************************/
+void PREF4 CallBackBlock(int16_t handle, PICO_STATUS status, void * pParameter)
 {
-	int16_t *count;
-	int16_t *serialLth = (int16_t*)128;
-	int8_t  serials[*serialLth];
-
-	PICO_STATUS ps = ps6000EnumerateUnits(count, serials, serialLth);
-
-	stringstream ss;
-	ss << (char*) serials;
-	string line;
-
-	cout << "Serial Numbers:" << endl;
-	while (getline(ss, line, ','))
+	if (status != PICO_CANCELLED)
 	{
-		cout << line << endl;
+		g_ready = TRUE;
 	}
-	return;
 }
-
-
 
 /****************************************************************************
 * mv_to_adc

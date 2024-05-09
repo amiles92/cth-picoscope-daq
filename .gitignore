@@ -2,3 +2,4 @@
 build/*
 picosdk-c-examples*
 tmp/*
+*.so
