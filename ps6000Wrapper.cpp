@@ -416,7 +416,8 @@ void SetDefaults(UNIT *unit)
 	{
 		status = ps6000SetChannel(unit->handle, (PS6000_CHANNEL) (PS6000_CHANNEL_A + i),
 			unit->channelSettings[PS6000_CHANNEL_A + i].enabled,
-			(PS6000_COUPLING)unit->channelSettings[PS6000_CHANNEL_A + i].DCcoupled,
+			PS6000_AC,
+			// (PS6000_COUPLING)unit->channelSettings[PS6000_CHANNEL_A + i].DCcoupled,
 			(PS6000_RANGE)unit->channelSettings[PS6000_CHANNEL_A + i].range, 0, PS6000_BW_FULL);
 	}
 
@@ -431,18 +432,11 @@ void SetVoltages(UNIT *unit, uint16_t ranges[4])
 	int32_t count = 0;
 	int16_t loop;
 
-	for (int i = 0; i < 4; i++)
-	{
-		pp(to_string(ranges[i]));
-	}
-
 
 	for (ch = 0; ch < unit->channelCount; ch++) 
 	{
-		assert(unit->firstRange <= (PS6000_RANGE) ranges[ch] <= unit->lastRange);
 
 		unit->channelSettings[ch].range = ranges[ch];
-
 
 		if (unit->channelSettings[ch].range != 99) 
 		{
@@ -459,6 +453,7 @@ void SetVoltages(UNIT *unit, uint16_t ranges[4])
 
 
 	SetDefaults(unit);	// Put these changes into effect
+	pp("defaults set");
 }
 
 
@@ -530,7 +525,9 @@ vector<vector<int16_t*>> SetDataBuffers(UNIT *unit, bitset<4> activeChannels,
 void SetSimpleTriggerSettings(UNIT *unit, int16_t threshold, 
 		PS6000_THRESHOLD_DIRECTION dir, PS6000_CHANNEL ch)
 {
+	pp("in simple");
 	disableTrigger(unit);
+	pp("disabled");
 
 	ps6000SetSimpleTrigger(unit->handle, 1, ch, threshold, dir, 0, 0);
 	return;
@@ -538,10 +535,28 @@ void SetSimpleTriggerSettings(UNIT *unit, int16_t threshold,
 
 void disableTrigger(UNIT *unit)
 {
-	for (int i = 0; i < PS6000_MAX_TRIGGER_SOURCES; i++)
-	{
-		ps6000SetSimpleTrigger(unit->handle, 0, (PS6000_CHANNEL) (PS6000_CHANNEL_A + i), 0, PS6000_NONE, 0, 0);
-	}
+	ps6000SetTriggerChannelProperties(unit->handle, NULL, 0, 0, 0);
+	ps6000SetTriggerChannelConditions(unit->handle,	NULL, 0);
+	ps6000SetTriggerChannelDirections(  unit->handle, 
+										PS6000_ABOVE,
+										PS6000_ABOVE,
+										PS6000_ABOVE,
+										PS6000_ABOVE,
+										PS6000_ABOVE,
+										PS6000_ABOVE);
+	ps6000SetTriggerDelay(unit->handle, 0);
+
+	struct tPwq *pwq;
+	memset(pwq, 0, sizeof(struct tPwq));
+
+	ps6000SetPulseWidthQualifier(   unit->handle, 
+								    pwq->conditions,
+								    pwq->nConditions, 
+								    pwq->direction,
+								    pwq->lower, 
+								    pwq->upper, 
+								    pwq->type);
+
 	return;
 }
 
@@ -557,9 +572,9 @@ void SetMultiTriggerSettings(UNIT *unit, bitset<5> triggers, vector<int8_t> thre
 	return;
 }
 
-void SetTriggers(UNIT *unit, bitset<5> triggers, vector<int8_t> chThreshold, int8_t auxThreshold)
+void SetTriggers(UNIT *unit, bitset<5> triggers, vector<int16_t> chThreshold, int16_t auxThreshold)
 {
-	assert(chThreshold.size() == 5);
+	assert(chThreshold.size() == 4);
 	
 	if (triggers.count() == 0)
 	{
@@ -567,22 +582,67 @@ void SetTriggers(UNIT *unit, bitset<5> triggers, vector<int8_t> chThreshold, int
 	}
 	if (triggers.count() == 1)
 	{
-		for (int i = 0; i < triggers.size(); i++)
+		for (int i = 0; i < 4; i++)
 		{
-			if (triggers.test(i))
+			if (triggers.test(4 - i))
 			{
+				pp("setting simple");
 				SetSimpleTriggerSettings(unit, chThreshold.at(i), (PS6000_THRESHOLD_DIRECTION)
 					((chThreshold.at(i) >= 0) ? PS6000_RISING : PS6000_FALLING), (PS6000_CHANNEL) (PS6000_CHANNEL_A + i));
 				break;
 			}
 		}
+		if (triggers.test(0))
+		{
+			SetSimpleTriggerSettings(unit, auxThreshold, (PS6000_THRESHOLD_DIRECTION)
+					((auxThreshold >= 0) ? PS6000_RISING : PS6000_FALLING), (PS6000_CHANNEL) (PS6000_TRIGGER_AUX));
+		}
 	}
 	else
 	{
-		SetMultiTriggerSettings(unit, triggers, chThreshold, auxThreshold);
+		pp("multi tri");
+		// SetMultiTriggerSettings(unit, triggers, chThreshold, auxThreshold);
 	}
 	return;
 }
+
+int32_t _getch()
+{
+        struct termios oldt, newt;
+        int32_t ch;
+        int32_t bytesWaiting;
+        tcgetattr(STDIN_FILENO, &oldt);
+        newt = oldt;
+        newt.c_lflag &= ~( ICANON | ECHO );
+        tcsetattr(STDIN_FILENO, TCSANOW, &newt);
+        setbuf(stdin, NULL);
+        do {
+                ioctl(STDIN_FILENO, FIONREAD, &bytesWaiting);
+                if (bytesWaiting)
+                        getchar();
+        } while (bytesWaiting);
+
+        ch = getchar();
+
+        tcsetattr(STDIN_FILENO, TCSANOW, &oldt);
+        return ch;
+}
+
+int32_t _kbhit()
+{
+        struct termios oldt, newt;
+        int32_t bytesWaiting;
+        tcgetattr(STDIN_FILENO, &oldt);
+        newt = oldt;
+        newt.c_lflag &= ~( ICANON | ECHO );
+        tcsetattr(STDIN_FILENO, TCSANOW, &newt);
+        setbuf(stdin, NULL);
+        ioctl(STDIN_FILENO, FIONREAD, &bytesWaiting);
+
+        tcsetattr(STDIN_FILENO, TCSANOW, &oldt);
+        return bytesWaiting;
+}
+
 
 void StartRapidBlock(UNIT *unit, uint16_t preTrigger, uint16_t postTriggerMax,
 	uint8_t timebase, uint32_t numWaveforms)
@@ -594,10 +654,30 @@ void StartRapidBlock(UNIT *unit, uint16_t preTrigger, uint16_t postTriggerMax,
 
 	g_ready = FALSE;
 
-	while (!g_ready)
+	while (!g_ready && !_kbhit())
 	{
-		usleep(0);
+		usleep(100);
 	}
+
+		if (!g_ready)
+	{
+		_getch();
+		uint32_t nCompletedCaptures;
+		status = ps6000Stop(unit->handle);
+		status = ps6000GetNoOfCaptures(unit->handle, &nCompletedCaptures);
+
+		printf("Rapid capture aborted. %d complete blocks were captured\n", nCompletedCaptures);
+
+		pp(to_string(nCompletedCaptures));
+
+		throw "aborted, need to implement early cancellation writeout";
+
+		//Only display the blocks that were captured
+		// nCaptures = (uint16_t)nCompletedCaptures;
+	}
+
+	pp("done with daq");
+
 
 	uint32_t nSamples = preTrigger + postTriggerMax;
 
@@ -654,6 +734,8 @@ PICO_STATUS HandleDevice(UNIT * unit)
 
 
 	SetDefaults(unit);
+
+	pp("Defaults set");
 
 	/* Trigger disabled	*/
 	disableTrigger(unit);

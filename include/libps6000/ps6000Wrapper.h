@@ -141,7 +141,7 @@ void disableTrigger(UNIT *unit);
 void SetMultiTriggerSettings(UNIT *unit, std::bitset<5> triggers, std::vector<int8_t> thresholds,
 		int8_t auxThreshold);
 
-void SetTriggers(UNIT *unit, std::bitset<5> triggers, std::vector<int8_t> chThreshold, int8_t auxThreshold);
+void SetTriggers(UNIT *unit, std::bitset<5> triggers, std::vector<int16_t> chThreshold, int16_t auxThreshold);
 
 PICO_STATUS OpenDevice(UNIT *unit, int8_t *serial);
 

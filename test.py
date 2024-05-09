@@ -8,11 +8,17 @@ serials = daq.getSerials()
 picoscopes = serials.split(",")
 if len(picoscopes) > 1:
     print(picoscopes)
-
-ps = daq.runDAQ(outFile,
-                10, 2, 100,
+ps = 0
+try:
+    ps = daq.runDAQ(outFile,
+                10, 2, 8,
                 0, 99, 0,
                 0, 99, 0,
                 0, 99, 0,
-                0, 2, 100, 0, picoscopes[0]
+                0, 2, 10, 0, picoscopes[0]
                 )
+except:
+    print(ps)
+    pass
+print("Continued anyways")
+# check outfile
