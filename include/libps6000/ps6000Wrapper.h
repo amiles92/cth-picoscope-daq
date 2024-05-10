@@ -106,8 +106,6 @@ typedef struct tBufferInfo
 
 } BUFFER_INFO;
 
-void pp(std::string out);
-
 /****************************************************************************
 * Initialise unit' structure with Variant specific defaults
 ****************************************************************************/
@@ -123,10 +121,9 @@ void SetDefaults(UNIT *unit);
 ****************************************************************************/
 void SetVoltages(UNIT *unit, uint16_t ranges[4]);
 
-void SetNumWaveforms(UNIT *unit, uint32_t numWaveforms);
-
 std::vector<std::vector<int16_t*>> SetDataBuffers(UNIT *unit, std::bitset<4> activeChannels, 
-	std::vector<uint16_t> samplesPerChannel, uint16_t samplesPreTrigger, uint32_t numWaveforms);
+	std::vector<uint16_t> samplesPerChannel, uint16_t samplesPreTrigger, 
+	uint32_t numWaveforms, uint16_t maxPostSamples);
 
 void SetTimebase(UNIT *unit, uint8_t timebase, uint16_t maxChSamples);
 

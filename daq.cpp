@@ -50,6 +50,7 @@ public:
     vector<int16_t> chTriggerThresholdADC;
     int16_t auxTriggerThresholdADC;
     vector<uint16_t> chPostSamplesPerWaveform; // NOTE: Excludes pre trigger samples
+    uint16_t maxPostSamples;
     uint16_t samplesPreTrigger;
     uint32_t numWaveforms;
     vector<vector<int16_t*>> dataBuffers;
@@ -67,15 +68,17 @@ void setActiveChannels(dataCollectionConfig &dcc,
                        uint16_t cChVoltage,
                        uint16_t dChVoltage)
 {
-    bitset<4> activeChannels;
     uint16_t chVoltage[4] = {aChVoltage, bChVoltage, cChVoltage, dChVoltage};
 
     for (int i = 0; i < 4; i++)
     {
-        if (chVoltage[i] != 99) {activeChannels.set(3 - i);}
+        if (chVoltage[i] != 99) 
+        {
+            dcc.activeChannels.set(i);
+        }
     }
 
-    dcc.activeChannels = activeChannels;
+    cout << "after setting dcc.active" << endl;
 
     SetVoltages(dcc.unit, chVoltage);
     return;
@@ -88,7 +91,6 @@ void setTriggerConfig(dataCollectionConfig &dcc,
                       int16_t *dTrigVoltageMv,
                       int16_t *auxTrigVoltageMv)
 {
-    bitset<5> activeTriggers;
 
     int16_t trigVoltageMv[5] = {*aTrigVoltageMv,
                                 *bTrigVoltageMv,
@@ -99,12 +101,11 @@ void setTriggerConfig(dataCollectionConfig &dcc,
 
     for (int i = 0; i < 4; i++)
     {
-        if (trigVoltageMv[i] != 0 && dcc.activeChannels.test(3 - i))
+        if (trigVoltageMv[i] != 0 && dcc.activeChannels.test(i))
         {
-            activeTriggers.set(4 - i);
+            dcc.activeTriggers.set(i + 1);
             dcc.chTriggerThresholdADC.push_back(mv_to_adc(trigVoltageMv[i], 
             dcc.unit->channelSettings[PS6000_CHANNEL_A + i].range));
-            pp(to_string(dcc.chTriggerThresholdADC.at(i)));
         }
         else
         {
@@ -113,7 +114,7 @@ void setTriggerConfig(dataCollectionConfig &dcc,
     }
     if (trigVoltageMv[4] != 0)
     {
-        activeTriggers.set(0);
+        dcc.activeTriggers.set(0);
         dcc.auxTriggerThresholdADC = mv_to_adc(trigVoltageMv[4], 
         dcc.unit->channelSettings[PS6000_TRIGGER_AUX].range);
     }
@@ -121,9 +122,8 @@ void setTriggerConfig(dataCollectionConfig &dcc,
     {
         dcc.auxTriggerThresholdADC = 0;
     }
-    dcc.activeTriggers = activeTriggers;
 
-    SetTriggers(dcc.unit, activeTriggers, dcc.chTriggerThresholdADC, dcc.auxTriggerThresholdADC);
+    SetTriggers(dcc.unit, dcc.activeTriggers, dcc.chTriggerThresholdADC, dcc.auxTriggerThresholdADC);
 
     return;
 }
@@ -138,10 +138,11 @@ void setDataConfig(dataCollectionConfig &dcc, uint8_t *timebase,
 
     vector<uint16_t> samplesPerWaveform = {*chAWfSamples, *chBWfSamples, *chCWfSamples, *chDWfSamples};
     dcc.chPostSamplesPerWaveform = samplesPerWaveform;
+    dcc.maxPostSamples = *max_element(  dcc.chPostSamplesPerWaveform.begin(),
+                                        dcc.chPostSamplesPerWaveform.end());
 
-    SetNumWaveforms(dcc.unit, *numWaveforms);
     dcc.dataBuffers = SetDataBuffers(dcc.unit, dcc.activeChannels, samplesPerWaveform, 
-            *samplesPreTrigger, *numWaveforms);
+            *samplesPreTrigger, *numWaveforms, dcc.maxPostSamples);
 
     return;
 }
@@ -161,6 +162,49 @@ void setDataOutput(dataCollectionConfig &dcc, char *outputFileName)
     return;
 }
 
+bool isLittleEndian()
+{
+    uint32_t i = 1;
+    char *c = (char*)&i;
+    return bool(*c);
+}
+
+int16_t bswap16(int16_t n)
+{
+    if (isLittleEndian()) {return __builtin_bswap16(n);}
+    else {return n;}
+}
+
+uint16_t bswapu16(uint16_t n)
+{
+    if (isLittleEndian()) {return __builtin_bswap16(n);}
+    else {return n;}
+}
+
+int32_t bswap32(int32_t n)
+{
+    if (isLittleEndian()) {return __builtin_bswap32(n);}
+    else {return n;}
+}
+
+uint32_t bswapu32(uint32_t n)
+{
+    if (isLittleEndian()) {return __builtin_bswap32(n);}
+    else {return n;}
+}
+
+template<std::size_t N>
+void bitset_reverse(std::bitset<N> &b) 
+{
+    for(std::size_t i = 0; i < N/2; ++i) 
+    {
+        bool t = b[i];
+        b[i] = b[N-i-1];
+        b[N-i-1] = t;
+    }
+}
+
+
 void writeDataHeader(dataCollectionConfig &dcc)
 {
     // Bit layout, in order
@@ -176,8 +220,17 @@ void writeDataHeader(dataCollectionConfig &dcc)
     // 32 bits: number of waveforms
     // total above bits: 216 (27 bytes)
     // 8 bytes: model string
-    // 16 bytes (16 chars): serial number?
-    // 
+    // 8 bytes (16 chars): serial number?
+    // MODEL STRING AND SERIAL AREN'T ZERO PADDED, NEED TO ENSURE 
+    // DATA DISTANCE IS CONSISTENT AND ADD THAT. OR GO 0 TERMINATED IN PY SIDE
+
+    int16_t o16;
+    uint16_t ou16;
+    int32_t o32;
+    uint32_t ou32;
+
+    bitset_reverse(dcc.activeChannels);
+    bitset_reverse(dcc.activeTriggers);
 
     uint8_t timebaseActiveCh =  dcc.timebase.to_ullong() << 4 |
                                 dcc.activeChannels.to_ullong();
@@ -186,37 +239,33 @@ void writeDataHeader(dataCollectionConfig &dcc)
     uint8_t activeTriggers = (uint8_t) dcc.activeTriggers.to_ullong();
     dcc.ostream.write((const char *) &activeTriggers, sizeof(uint8_t));
 
-    dcc.ostream.write((const char *) &dcc.auxTriggerThresholdADC, sizeof(uint16_t));
+    o16 = bswap16(dcc.auxTriggerThresholdADC);
+    dcc.ostream.write((const char *) &o16, sizeof(int16_t));
 
     for (int i = 0; i < 4; i++)
     {
-        pp(to_string(dcc.chTriggerThresholdADC.at(i)));
-        dcc.ostream.write((const char *) &dcc.chTriggerThresholdADC.at(i), sizeof(int16_t));
+        o16 = bswap16(dcc.chTriggerThresholdADC.at(i));
+        dcc.ostream.write((const char *) &o16, sizeof(int16_t));
     }
 
-    uint16_t voltRanges = (uint16_t) dcc.chVoltageRanges.to_ullong();
-    dcc.ostream.write((const char *) &voltRanges, sizeof(uint16_t));
-    pp("ch volt");
+    ou16 = bswapu16((uint16_t) dcc.chVoltageRanges.to_ullong());
+    dcc.ostream.write((const char *) &ou16, sizeof(uint16_t));
 
     for (int i = 0; i < 4; i++)
     {
-        uint16_t nSamples = dcc.chPostSamplesPerWaveform.at(i) + dcc.samplesPreTrigger;
-        dcc.ostream.write((const char *) &nSamples, sizeof(int16_t));
+        o16 = bswap16(dcc.chPostSamplesPerWaveform.at(i) + dcc.samplesPreTrigger);
+        dcc.ostream.write((const char *) &ou16, sizeof(int16_t));
     }
 
-    dcc.ostream.write((const char *) &dcc.samplesPreTrigger, sizeof(int16_t));
+    ou16 = bswapu16(dcc.samplesPreTrigger);
+    dcc.ostream.write((const char *) &ou16, sizeof(uint16_t));
 
-    dcc.ostream.write((const char *) &dcc.numWaveforms, sizeof(int32_t));
+    o32 = bswap32(dcc.numWaveforms);
+    dcc.ostream.write((const char *) &o32, sizeof(int32_t));
 
-    pp("numwf");
-
-    dcc.ostream.write((const char *) &dcc.unit->modelString, sizeof(int8_t) * 8);
-
-    pp("model");
+    dcc.ostream.write((const char *) &dcc.unit->modelString, sizeof(dcc.unit->modelString));
 
     dcc.ostream.write((const char *) &dcc.serial, sizeof(&dcc.serial));
-
-    pp("model string/serial");
 
     return;
 }
@@ -228,8 +277,8 @@ void writeDataOut(dataCollectionConfig &dcc)
     
     for (int i = 0; i < dcc.activeChannels.count(); i++)
     {
-        uint64_t bufferSize = (dcc.chPostSamplesPerWaveform.at(i) + dcc.samplesPreTrigger) 
-                                * dcc.numWaveforms * sizeof(int16_t);
+        uint64_t bufferSize = (dcc.chPostSamplesPerWaveform.at(i) 
+                             + dcc.samplesPreTrigger) * sizeof(int16_t);
         for (int j = 0; j < dcc.numWaveforms; j++)
         {
             dcc.ostream.write((const char*)dcc.dataBuffers.at(i).at(j), bufferSize);
@@ -254,23 +303,29 @@ int runDAQ(char *outputFile,
     try
     {
         dataCollectionConfig dcc(unit, serial);
+        printf("collected data1\n");
         setActiveChannels(dcc, chAVRange, chBVRange, chCVRange, chDVRange);
+        printf("collected data0.5\n");
         setTriggerConfig(dcc, &chATrigger, &chBTrigger, &chCTrigger, &chDTrigger, &auxTrigger);
+        printf("collected data2\n");
         setDataConfig(dcc, &timebase, &numWaveforms, &samplesPreTrigger, 
                     &chAWfSamples, &chBWfSamples, &chCWfSamples, &chDWfSamples);
+        printf("collected data3\n");
 
         collectRapidBlockData(dcc);
-        pp("collected data");
+        printf("collected data\n");
         setDataOutput(dcc, outputFile);
         writeDataHeader(dcc);
-        pp("wrote header");
+        printf("wrote header\n");
         writeDataOut(dcc);
-        pp("wrote data");
+        printf("wrote data\n");
         CloseDevice(unit);
-        pp("end");
+        printf("end\n");
     }
     catch (exception e)
     {
+        printf("Final Catch\n");
+        cout << e.what() << endl;
         CloseDevice(unit);
         throw e;
     }

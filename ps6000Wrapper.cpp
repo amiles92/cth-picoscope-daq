@@ -59,12 +59,6 @@ int16_t     g_trig = 0;
 uint32_t	g_trigAt = 0;
 int16_t		g_overflow;
 
-
-void pp(string out)
-{
-	cout << out << endl;
-}
-
 void set_info(UNIT *unit)
 {
 	int16_t i = 0;
@@ -412,13 +406,17 @@ void SetDefaults(UNIT *unit)
 
 	status = ps6000SetEts(unit->handle, PS6000_ETS_OFF, 0, 0, NULL); // Turn off ETS
 
+	cout << "ets" << endl;
+
 	for (i = 0; i < unit->channelCount; i++) // reset channels to most recent settings
 	{
+		cout << "doing " << i << endl;
 		status = ps6000SetChannel(unit->handle, (PS6000_CHANNEL) (PS6000_CHANNEL_A + i),
 			unit->channelSettings[PS6000_CHANNEL_A + i].enabled,
 			PS6000_AC,
 			// (PS6000_COUPLING)unit->channelSettings[PS6000_CHANNEL_A + i].DCcoupled,
 			(PS6000_RANGE)unit->channelSettings[PS6000_CHANNEL_A + i].range, 0, PS6000_BW_FULL);
+		cout << "done " << i << endl;
 	}
 
 }
@@ -430,8 +428,6 @@ void SetVoltages(UNIT *unit, uint16_t ranges[4])
 {
 	int32_t i, ch;
 	int32_t count = 0;
-	int16_t loop;
-
 
 	for (ch = 0; ch < unit->channelCount; ch++) 
 	{
@@ -453,7 +449,7 @@ void SetVoltages(UNIT *unit, uint16_t ranges[4])
 
 
 	SetDefaults(unit);	// Put these changes into effect
-	pp("defaults set");
+	printf("defaults set\n");
 }
 
 
@@ -481,27 +477,27 @@ void SetTimebase(UNIT *unit, uint8_t timebase, uint16_t maxChSamples) // Don't n
 
 }
 
-void SetNumWaveforms(UNIT *unit, uint32_t numWaveforms)
-{
-	ps6000SetNoOfCaptures(unit->handle, numWaveforms);
-	return;
-}
-
 vector<vector<int16_t*>> SetDataBuffers(UNIT *unit, bitset<4> activeChannels, 
-	vector<uint16_t> samplesPerChannel, uint16_t samplesPreTrigger, uint32_t numWaveforms)
+	vector<uint16_t> samplesPerChannel, uint16_t samplesPreTrigger, 
+	uint32_t numWaveforms, uint16_t maxPostSamples)
 {//Using rapid block mode only for now
 	vector<vector<int16_t*>> outBuffers(activeChannels.count());
 
-	uint32_t maxSamples = 0;
-
 	enPS6000Channel ch = PS6000_CHANNEL_A;
+
+	uint32_t nMaxSamples = activeChannels.count() * maxPostSamples;
+	PICO_STATUS status = ps6000MemorySegments(unit->handle, numWaveforms, &nMaxSamples);
+	if (status != PICO_OK)
+	{
+		throw "Improperly set pico memory segments";
+	}
+	ps6000SetNoOfCaptures(unit->handle, numWaveforms);
 
 	for (int i = 0; i < 4; i++)
 	{
-		if (!activeChannels.test(3 - i)) {continue;}
+		if (!activeChannels.test(i)) {continue;}
 
 		uint16_t chSamples = samplesPreTrigger + samplesPerChannel.at(i);
-		maxSamples = max(maxSamples, (uint32_t) chSamples); 
 		outBuffers.at(i) = vector<int16_t*>(numWaveforms);
 
 		for (int j = 0; j < numWaveforms; j++)
@@ -511,13 +507,11 @@ vector<vector<int16_t*>> SetDataBuffers(UNIT *unit, bitset<4> activeChannels,
 			{
 				cout << "Memory allocation failed: " << i << ", " << j << endl;
 			}
+			printf("Active ch %d, Wf no %d data buffer set\n", i, j);
 			ps6000SetDataBufferBulk(unit->handle, (PS6000_CHANNEL) (ch + i),
 				outBuffers.at(i).at(j), chSamples, j, PS6000_RATIO_MODE_NONE);
 		}
 	}
-
-	uint32_t nMaxSamples = activeChannels.count() * maxSamples;
-	ps6000MemorySegments(unit->handle, numWaveforms, &nMaxSamples);
 
 	return outBuffers;
 }
@@ -525,9 +519,7 @@ vector<vector<int16_t*>> SetDataBuffers(UNIT *unit, bitset<4> activeChannels,
 void SetSimpleTriggerSettings(UNIT *unit, int16_t threshold, 
 		PS6000_THRESHOLD_DIRECTION dir, PS6000_CHANNEL ch)
 {
-	pp("in simple");
 	disableTrigger(unit);
-	pp("disabled");
 
 	ps6000SetSimpleTrigger(unit->handle, 1, ch, threshold, dir, 0, 0);
 	return;
@@ -546,16 +538,16 @@ void disableTrigger(UNIT *unit)
 										PS6000_ABOVE);
 	ps6000SetTriggerDelay(unit->handle, 0);
 
-	struct tPwq *pwq;
-	memset(pwq, 0, sizeof(struct tPwq));
+	struct tPwq pwq;
+	memset(&pwq, 0, sizeof(struct tPwq));
 
 	ps6000SetPulseWidthQualifier(   unit->handle, 
-								    pwq->conditions,
-								    pwq->nConditions, 
-								    pwq->direction,
-								    pwq->lower, 
-								    pwq->upper, 
-								    pwq->type);
+								    pwq.conditions,
+								    pwq.nConditions, 
+								    pwq.direction,
+								    pwq.lower, 
+								    pwq.upper, 
+								    pwq.type);
 
 	return;
 }
@@ -584,9 +576,8 @@ void SetTriggers(UNIT *unit, bitset<5> triggers, vector<int16_t> chThreshold, in
 	{
 		for (int i = 0; i < 4; i++)
 		{
-			if (triggers.test(4 - i))
+			if (triggers.test(i + 1))
 			{
-				pp("setting simple");
 				SetSimpleTriggerSettings(unit, chThreshold.at(i), (PS6000_THRESHOLD_DIRECTION)
 					((chThreshold.at(i) >= 0) ? PS6000_RISING : PS6000_FALLING), (PS6000_CHANNEL) (PS6000_CHANNEL_A + i));
 				break;
@@ -600,7 +591,7 @@ void SetTriggers(UNIT *unit, bitset<5> triggers, vector<int16_t> chThreshold, in
 	}
 	else
 	{
-		pp("multi tri");
+		printf("multi trig (will fail since unimplemented)");
 		// SetMultiTriggerSettings(unit, triggers, chThreshold, auxThreshold);
 	}
 	return;
@@ -649,34 +640,34 @@ void StartRapidBlock(UNIT *unit, uint16_t preTrigger, uint16_t postTriggerMax,
 {
 	PICO_STATUS status;
 	int32_t timeIndisposed;
-	ps6000RunBlock(unit->handle, preTrigger, postTriggerMax, timebase, 0, 
-			&timeIndisposed, 0, CallBackBlock, NULL);
+	uint32_t nCompletedCaptures;
 
-	g_ready = FALSE;
+	// for (int wf = 0; wf < numWaveforms; wf++)
+	// {
+		ps6000RunBlock(unit->handle, preTrigger, postTriggerMax, timebase, 0, 
+				&timeIndisposed, 0, CallBackBlock, NULL);
+		g_ready = FALSE;
 
-	while (!g_ready && !_kbhit())
-	{
-		usleep(100);
-	}
+		while (!g_ready && !_kbhit()) // XXX: Should change to only cancel if getch == ctrl+c
+		{
+			usleep(0);
+		}
 
 		if (!g_ready)
-	{
-		_getch();
-		uint32_t nCompletedCaptures;
-		status = ps6000Stop(unit->handle);
-		status = ps6000GetNoOfCaptures(unit->handle, &nCompletedCaptures);
+		{
+			_getch();
+			status = ps6000Stop(unit->handle);
+			status = ps6000GetNoOfCaptures(unit->handle, &nCompletedCaptures);
 
-		printf("Rapid capture aborted. %d complete blocks were captured\n", nCompletedCaptures);
+			printf("Rapid capture aborted. %d complete blocks were captured\n", nCompletedCaptures);
 
-		pp(to_string(nCompletedCaptures));
+			throw "aborted, need to implement early cancellation writeout";
 
-		throw "aborted, need to implement early cancellation writeout";
+		}
+	// }
 
-		//Only display the blocks that were captured
-		// nCaptures = (uint16_t)nCompletedCaptures;
-	}
-
-	pp("done with daq");
+	printf("Time indisposed: %d (ms?)", timeIndisposed);
+	status = ps6000GetNoOfCaptures(unit->handle, &nCompletedCaptures);
 
 
 	uint32_t nSamples = preTrigger + postTriggerMax;
@@ -684,6 +675,8 @@ void StartRapidBlock(UNIT *unit, uint16_t preTrigger, uint16_t postTriggerMax,
 	// Get data
 	status = ps6000GetValuesBulk(unit->handle, &nSamples, 0, numWaveforms - 1, 
 			1, PS6000_RATIO_MODE_NONE, NULL);
+
+	cout << status << endl;
 	
 	// ps6000GetValuesTriggerTimeOffsetBulk64
 
@@ -732,12 +725,8 @@ PICO_STATUS HandleDevice(UNIT * unit)
 		set_info(unit);
 	}
 
-
 	SetDefaults(unit);
 
-	pp("Defaults set");
-
-	/* Trigger disabled	*/
 	disableTrigger(unit);
 
 	return unit->openStatus;
@@ -752,7 +741,6 @@ void findUnit(UNIT *unit, int8_t *serial)
 {
 	if (serial == NULL)
 	{
-		pp(to_string(*serial));
 		findUnit(unit);
 		return;
 	}
