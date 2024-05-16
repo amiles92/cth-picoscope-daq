@@ -119,7 +119,7 @@ void SetDefaults(UNIT *unit);
 /****************************************************************************
 * Select input voltage ranges for channels
 ****************************************************************************/
-void SetVoltages(UNIT *unit, uint16_t ranges[4]);
+void SetVoltages(UNIT *unit, int16_t ranges[4]);
 
 std::vector<std::vector<int16_t*>> SetDataBuffers(UNIT *unit, std::bitset<4> activeChannels, 
 	std::vector<uint16_t> samplesPerChannel, uint16_t samplesPreTrigger, 

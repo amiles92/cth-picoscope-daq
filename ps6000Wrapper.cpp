@@ -424,14 +424,17 @@ void SetDefaults(UNIT *unit)
 /****************************************************************************
 * Select input voltage ranges for channels
 ****************************************************************************/
-void SetVoltages(UNIT *unit, uint16_t ranges[4])
+void SetVoltages(UNIT *unit, int16_t ranges[4])
 {
-	int32_t i, ch;
+	cout << "entered setvoltages" << endl;
+	int32_t ch;
 	int32_t count = 0;
+
+	cout << unit->channelCount << endl;
 
 	for (ch = 0; ch < unit->channelCount; ch++) 
 	{
-
+		cout << "setting ch " << ch << endl;
 		unit->channelSettings[ch].range = ranges[ch];
 
 		if (unit->channelSettings[ch].range != 99) 
@@ -591,7 +594,7 @@ void SetTriggers(UNIT *unit, bitset<5> triggers, vector<int16_t> chThreshold, in
 	}
 	else
 	{
-		printf("multi trig (will fail since unimplemented)");
+		printf("multi trig (will fail since unimplemented)\n");
 		// SetMultiTriggerSettings(unit, triggers, chThreshold, auxThreshold);
 	}
 	return;
@@ -666,7 +669,7 @@ void StartRapidBlock(UNIT *unit, uint16_t preTrigger, uint16_t postTriggerMax,
 		}
 	// }
 
-	printf("Time indisposed: %d (ms?)", timeIndisposed);
+	printf("Time indisposed: %d (ms?)\n", timeIndisposed);
 	status = ps6000GetNoOfCaptures(unit->handle, &nCompletedCaptures);
 
 
@@ -719,11 +722,7 @@ PICO_STATUS HandleDevice(UNIT * unit)
 	}
 
 	printf("Device opened successfully\n\n");
-	// setup device info - unless it's set already
-	if (unit->model == MODEL_NONE)
-	{
-		set_info(unit);
-	}
+	set_info(unit);
 
 	SetDefaults(unit);
 
@@ -811,7 +810,7 @@ void findUnit(UNIT *unit)
 	} 
 	else
 	{
-		printf("Too many picoscope devices found");
+		printf("Too many picoscope devices found\n");
 	}
 }
 

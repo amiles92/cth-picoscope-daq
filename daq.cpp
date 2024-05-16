@@ -63,12 +63,12 @@ public:
 };
 
 void setActiveChannels(dataCollectionConfig &dcc, 
-                       uint16_t aChVoltage,
-                       uint16_t bChVoltage,
-                       uint16_t cChVoltage,
-                       uint16_t dChVoltage)
+                       int16_t aChVoltage,
+                       int16_t bChVoltage,
+                       int16_t cChVoltage,
+                       int16_t dChVoltage)
 {
-    uint16_t chVoltage[4] = {aChVoltage, bChVoltage, cChVoltage, dChVoltage};
+    int16_t chVoltage[4] = {aChVoltage, bChVoltage, cChVoltage, dChVoltage};
 
     for (int i = 0; i < 4; i++)
     {
@@ -81,22 +81,24 @@ void setActiveChannels(dataCollectionConfig &dcc,
     cout << "after setting dcc.active" << endl;
 
     SetVoltages(dcc.unit, chVoltage);
+
+    cout << "passed setvoltages" << endl;
     return;
 }
 
 void setTriggerConfig(dataCollectionConfig &dcc, 
-                      int16_t *aTrigVoltageMv,
-                      int16_t *bTrigVoltageMv,
-                      int16_t *cTrigVoltageMv,
-                      int16_t *dTrigVoltageMv,
-                      int16_t *auxTrigVoltageMv)
+                      int16_t aTrigVoltageMv,
+                      int16_t bTrigVoltageMv,
+                      int16_t cTrigVoltageMv,
+                      int16_t dTrigVoltageMv,
+                      int16_t auxTrigVoltageMv)
 {
 
-    int16_t trigVoltageMv[5] = {*aTrigVoltageMv,
-                                *bTrigVoltageMv,
-                                *cTrigVoltageMv,
-                                *dTrigVoltageMv,
-                                *auxTrigVoltageMv
+    int16_t trigVoltageMv[5] = {aTrigVoltageMv,
+                                bTrigVoltageMv,
+                                cTrigVoltageMv,
+                                dTrigVoltageMv,
+                                auxTrigVoltageMv
                                 };
 
     for (int i = 0; i < 4; i++)
@@ -232,8 +234,8 @@ void writeDataHeader(dataCollectionConfig &dcc)
     bitset_reverse(dcc.activeChannels);
     bitset_reverse(dcc.activeTriggers);
 
-    uint8_t timebaseActiveCh =  dcc.timebase.to_ullong() << 4 |
-                                dcc.activeChannels.to_ullong();
+    uint8_t timebaseActiveCh =  (uint8_t) dcc.timebase.to_ullong() << 4 |
+                                (uint8_t) dcc.activeChannels.to_ullong();
     dcc.ostream.write((const char *) &timebaseActiveCh, sizeof(uint8_t));
 
     uint8_t activeTriggers = (uint8_t) dcc.activeTriggers.to_ullong();
@@ -248,13 +250,13 @@ void writeDataHeader(dataCollectionConfig &dcc)
         dcc.ostream.write((const char *) &o16, sizeof(int16_t));
     }
 
-    ou16 = bswapu16((uint16_t) dcc.chVoltageRanges.to_ullong());
-    dcc.ostream.write((const char *) &ou16, sizeof(uint16_t));
+    o16 = bswap16((int16_t) dcc.chVoltageRanges.to_ullong());
+    dcc.ostream.write((const char *) &o16, sizeof(int16_t));
 
     for (int i = 0; i < 4; i++)
     {
         o16 = bswap16(dcc.chPostSamplesPerWaveform.at(i) + dcc.samplesPreTrigger);
-        dcc.ostream.write((const char *) &ou16, sizeof(int16_t));
+        dcc.ostream.write((const char *) &o16, sizeof(int16_t));
     }
 
     ou16 = bswapu16(dcc.samplesPreTrigger);
@@ -290,10 +292,10 @@ void writeDataOut(dataCollectionConfig &dcc)
 
 // to be run from python side
 int runDAQ(char *outputFile,
-            int16_t chATrigger, uint16_t chAVRange, uint16_t chAWfSamples,
-            int16_t chBTrigger, uint16_t chBVRange, uint16_t chBWfSamples,
-            int16_t chCTrigger, uint16_t chCVRange, uint16_t chCWfSamples,
-            int16_t chDTrigger, uint16_t chDVRange, uint16_t chDWfSamples,
+            int16_t chATrigger, int16_t chAVRange, uint16_t chAWfSamples,
+            int16_t chBTrigger, int16_t chBVRange, uint16_t chBWfSamples,
+            int16_t chCTrigger, int16_t chCVRange, uint16_t chCWfSamples,
+            int16_t chDTrigger, int16_t chDVRange, uint16_t chDWfSamples,
             int16_t auxTrigger, uint8_t timebase,
             uint32_t numWaveforms, uint16_t samplesPreTrigger, char *serial)
 {
@@ -303,20 +305,14 @@ int runDAQ(char *outputFile,
     try
     {
         dataCollectionConfig dcc(unit, serial);
-        printf("collected data1\n");
         setActiveChannels(dcc, chAVRange, chBVRange, chCVRange, chDVRange);
-        printf("collected data0.5\n");
-        setTriggerConfig(dcc, &chATrigger, &chBTrigger, &chCTrigger, &chDTrigger, &auxTrigger);
-        printf("collected data2\n");
+        setTriggerConfig(dcc, chATrigger, chBTrigger, chCTrigger, chDTrigger, auxTrigger);
         setDataConfig(dcc, &timebase, &numWaveforms, &samplesPreTrigger, 
                     &chAWfSamples, &chBWfSamples, &chCWfSamples, &chDWfSamples);
-        printf("collected data3\n");
 
         collectRapidBlockData(dcc);
-        printf("collected data\n");
         setDataOutput(dcc, outputFile);
         writeDataHeader(dcc);
-        printf("wrote header\n");
         writeDataOut(dcc);
         printf("wrote data\n");
         CloseDevice(unit);
@@ -325,7 +321,7 @@ int runDAQ(char *outputFile,
     catch (exception e)
     {
         printf("Final Catch\n");
-        cout << e.what() << endl;
+        cout << "Caught: " << e.what() << endl;
         CloseDevice(unit);
         throw e;
     }
