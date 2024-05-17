@@ -118,7 +118,7 @@ void setTriggerConfig(dataCollectionConfig &dcc,
     {
         dcc.activeTriggers.set(0);
         dcc.auxTriggerThresholdADC = mv_to_adc(trigVoltageMv[4], 
-        dcc.unit->channelSettings[PS6000_TRIGGER_AUX].range);
+        PS6000_1V);
     }
     else
     {
@@ -277,17 +277,24 @@ void writeDataOut(dataCollectionConfig &dcc)
     uint16_t maxSamples = *max_element( dcc.chPostSamplesPerWaveform.begin(), 
                                         dcc.chPostSamplesPerWaveform.end());
     
+    int16_t o16;
+    uint32_t s = sizeof(int16_t);
+
     for (int i = 0; i < dcc.activeChannels.count(); i++)
     {
-        uint64_t bufferSize = (dcc.chPostSamplesPerWaveform.at(i) 
-                             + dcc.samplesPreTrigger) * sizeof(int16_t);
+        uint64_t nSamples = (dcc.chPostSamplesPerWaveform.at(i) 
+                           + dcc.samplesPreTrigger);
         for (int j = 0; j < dcc.numWaveforms; j++)
         {
-            dcc.ostream.write((const char*)dcc.dataBuffers.at(i).at(j), bufferSize);
+            for (int k = 0; k < nSamples; k++)
+            {
+                o16 = bswap16((dcc.dataBuffers.at(i).at(j))[k]);
+                dcc.ostream.write((const char*) &o16, s);
+            }
             free(dcc.dataBuffers.at(i).at(j));
+            // dcc.ostream.write
         }
     }
-    dcc.ostream.close();
 }
 
 // to be run from python side

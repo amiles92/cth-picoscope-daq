@@ -10,11 +10,11 @@ picoscopes = serials.split(",")
 print(picoscopes)
 ps = 0
 ps = daq.runDAQ(outFile,
-            10, 2, 8,
+            0, 2, 8,
             0, 99, 0,
             0, 99, 0,
             0, 99, 0,
-            0, 2, 10, 0, picoscopes[0]
+            500, 2, 10, 0, picoscopes[0]
             )
 print(ps)
 
