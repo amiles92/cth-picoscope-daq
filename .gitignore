@@ -3,3 +3,5 @@ build/*
 picosdk-c-examples*
 tmp/*
 *.so
+*.dat
+test.py
