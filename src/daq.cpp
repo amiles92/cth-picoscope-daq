@@ -69,6 +69,8 @@ void setActiveChannels(dataCollectionConfig &dcc,
                        int16_t dChVoltage)
 {
     int16_t chVoltage[4] = {aChVoltage, bChVoltage, cChVoltage, dChVoltage};
+    uint8_t chVRangeBits[4];
+    uint16_t allVRange;
 
     for (int i = 0; i < 4; i++)
     {
@@ -76,7 +78,12 @@ void setActiveChannels(dataCollectionConfig &dcc,
         {
             dcc.activeChannels.set(i);
         }
+        chVRangeBits[i] = chVoltage[i] * dcc.activeChannels.test(i);
     }
+    dcc.chVoltageRanges = chVoltage[0] * dcc.activeChannels.test(0) << 12 |
+                          chVoltage[1] * dcc.activeChannels.test(1) <<  8 |
+                          chVoltage[2] * dcc.activeChannels.test(2) <<  4 |
+                          chVoltage[3] * dcc.activeChannels.test(3);
 
     cout << "after setting dcc.active" << endl;
 
@@ -214,13 +221,13 @@ void writeDataHeader(dataCollectionConfig &dcc)
     // 4 bits: ch1-4 active
     // 3 bits: padding
     // 5 bits: ch1-4, aux trigger active
-    // 8 bits: aux trigger threshold
+    // 16 bits: aux trigger threshold
     // 64 (16*4) bits: trigger threshold (ch1-4)
     // 16 (4*4): ch1-4 voltage ranges (aux is always +-1V range)
     // 64 (4*16) bits: number of TOTAL samples per waveform (including pretrigger)
     // 16 bits: number of samples before trigger
     // 32 bits: number of waveforms
-    // total above bits: 216 (27 bytes)
+    // total above bits: 224 (28 bytes)
     // 8 bytes: model string
     // 8 bytes (16 chars): serial number?
     // MODEL STRING AND SERIAL AREN'T ZERO PADDED, NEED TO ENSURE 
@@ -255,8 +262,8 @@ void writeDataHeader(dataCollectionConfig &dcc)
 
     for (int i = 0; i < 4; i++)
     {
-        o16 = bswap16(dcc.chPostSamplesPerWaveform.at(i) + dcc.samplesPreTrigger);
-        dcc.ostream.write((const char *) &o16, sizeof(int16_t));
+        ou16 = bswapu16(dcc.chPostSamplesPerWaveform.at(i) + dcc.samplesPreTrigger);
+        dcc.ostream.write((const char *) &ou16, sizeof(uint16_t));
     }
 
     ou16 = bswapu16(dcc.samplesPreTrigger);
@@ -265,9 +272,16 @@ void writeDataHeader(dataCollectionConfig &dcc)
     o32 = bswap32(dcc.numWaveforms);
     dcc.ostream.write((const char *) &o32, sizeof(int32_t));
 
-    dcc.ostream.write((const char *) &dcc.unit->modelString, sizeof(dcc.unit->modelString));
+    for (int i = 0; i < sizeof(dcc.unit->modelString); i++)
+    {
+        dcc.ostream.write((const char *) &dcc.unit->modelString[i], 1L);
+        if (dcc.unit->modelString[i] == '\0') {break;}
+    }
 
     dcc.ostream.write((const char *) &dcc.serial, sizeof(&dcc.serial));
+
+    char zero = '\0';
+    dcc.ostream.write(&zero, 1L);
 
     return;
 }
