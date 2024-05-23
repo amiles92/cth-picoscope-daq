@@ -85,11 +85,7 @@ void setActiveChannels(dataCollectionConfig &dcc,
                           chVoltage[2] * dcc.activeChannels.test(2) <<  4 |
                           chVoltage[3] * dcc.activeChannels.test(3);
 
-    cout << "after setting dcc.active" << endl;
-
     SetVoltages(dcc.unit, chVoltage);
-
-    cout << "passed setvoltages" << endl;
     return;
 }
 
@@ -306,7 +302,6 @@ void writeDataOut(dataCollectionConfig &dcc)
                 dcc.ostream.write((const char*) &o16, s);
             }
             free(dcc.dataBuffers.at(i).at(j));
-            // dcc.ostream.write
         }
     }
 }
@@ -335,14 +330,14 @@ int runDAQ(char *outputFile,
         setDataOutput(dcc, outputFile);
         writeDataHeader(dcc);
         writeDataOut(dcc);
-        printf("wrote data\n");
+        printf("Data written to %s\n", outputFile);
         CloseDevice(unit);
-        printf("end\n");
+        printf("Device closed\n");
     }
     catch (exception e)
     {
         printf("Final Catch\n");
-        cout << "Caught: " << e.what() << endl;
+        printf("Caught: %s\n", e.what());
         CloseDevice(unit);
         throw e;
     }

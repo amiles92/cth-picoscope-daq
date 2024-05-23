@@ -7,6 +7,7 @@
 #include <sstream>
 #include <iostream>
 #include <string>
+#include <chrono>
 
 #ifdef _WIN32
 #include "windows.h"
@@ -406,17 +407,13 @@ void SetDefaults(UNIT *unit)
 
 	status = ps6000SetEts(unit->handle, PS6000_ETS_OFF, 0, 0, NULL); // Turn off ETS
 
-	cout << "ets" << endl;
-
 	for (i = 0; i < unit->channelCount; i++) // reset channels to most recent settings
 	{
-		cout << "doing " << i << endl;
 		status = ps6000SetChannel(unit->handle, (PS6000_CHANNEL) (PS6000_CHANNEL_A + i),
 			unit->channelSettings[PS6000_CHANNEL_A + i].enabled,
 			PS6000_AC,
 			// (PS6000_COUPLING)unit->channelSettings[PS6000_CHANNEL_A + i].DCcoupled,
 			(PS6000_RANGE)unit->channelSettings[PS6000_CHANNEL_A + i].range, 0, PS6000_BW_FULL);
-		cout << "done " << i << endl;
 	}
 
 }
@@ -426,15 +423,11 @@ void SetDefaults(UNIT *unit)
 ****************************************************************************/
 void SetVoltages(UNIT *unit, int16_t ranges[4])
 {
-	cout << "entered setvoltages" << endl;
 	int32_t ch;
 	int32_t count = 0;
 
-	cout << unit->channelCount << endl;
-
 	for (ch = 0; ch < unit->channelCount; ch++) 
 	{
-		cout << "setting ch " << ch << endl;
 		unit->channelSettings[ch].range = ranges[ch];
 
 		if (unit->channelSettings[ch].range != 99) 
@@ -452,7 +445,6 @@ void SetVoltages(UNIT *unit, int16_t ranges[4])
 
 
 	SetDefaults(unit);	// Put these changes into effect
-	printf("defaults set\n");
 }
 
 
@@ -508,9 +500,8 @@ vector<vector<int16_t*>> SetDataBuffers(UNIT *unit, bitset<4> activeChannels,
 			outBuffers.at(i).at(j) = (int16_t*) calloc(chSamples, sizeof(int16_t));
 			if (outBuffers.at(i).at(j) == NULL)
 			{
-				cout << "Memory allocation failed: " << i << ", " << j << endl;
+				printf("Memory allocation failed: Ch %d, Wf %d\n", i, j);
 			}
-			printf("Active ch %d, Wf no %d data buffer set\n", i, j);
 			ps6000SetDataBufferBulk(unit->handle, (PS6000_CHANNEL) (ch + i),
 				outBuffers.at(i).at(j), chSamples, j, PS6000_RATIO_MODE_NONE);
 		}
@@ -645,31 +636,39 @@ void StartRapidBlock(UNIT *unit, uint16_t preTrigger, uint16_t postTriggerMax,
 	int32_t timeIndisposed;
 	uint32_t nCompletedCaptures;
 
-	// for (int wf = 0; wf < numWaveforms; wf++)
-	// {
-		ps6000RunBlock(unit->handle, preTrigger, postTriggerMax, timebase, 0, 
-				&timeIndisposed, 0, CallBackBlock, NULL);
-		g_ready = FALSE;
+	printf("\n\nStarting DAQ\n\n");
 
-		while (!g_ready && !_kbhit()) // XXX: Should change to only cancel if getch == ctrl+c
-		{
-			usleep(0);
-		}
+	chrono::steady_clock::time_point begin = std::chrono::steady_clock::now();
 
-		if (!g_ready)
-		{
-			_getch();
-			status = ps6000Stop(unit->handle);
-			status = ps6000GetNoOfCaptures(unit->handle, &nCompletedCaptures);
+	ps6000RunBlock(unit->handle, preTrigger, postTriggerMax, timebase, 0, 
+			&timeIndisposed, 0, CallBackBlock, NULL);
+	g_ready = FALSE;
 
-			printf("Rapid capture aborted. %d complete blocks were captured\n", nCompletedCaptures);
+	while (!g_ready && !_kbhit()) // XXX: Should change to only cancel if getch == ctrl+c
+	{
+		usleep(0);
+	}
 
-			throw "aborted, need to implement early cancellation writeout";
+	if (!g_ready)
+	{
+		_getch();
+		status = ps6000Stop(unit->handle);
+		status = ps6000GetNoOfCaptures(unit->handle, &nCompletedCaptures);
 
-		}
-	// }
+		printf("Rapid capture aborted. %d complete blocks were captured\n", nCompletedCaptures);
+		printf("Early abort writeout not yet supported\n");
 
-	printf("Time indisposed: %d (ms?)\n", timeIndisposed);
+		throw "aborted, need to implement early cancellation writeout";
+
+	}
+
+	chrono::steady_clock::time_point end = std::chrono::steady_clock::now();
+
+	int time = chrono::duration_cast<std::chrono::microseconds>(end - begin).count();
+
+	printf("Time taken: %d us\n", time);
+	printf("Trigger rate: %f Hz\n", (double) numWaveforms / time * 1.0e6);
+
 	status = ps6000GetNoOfCaptures(unit->handle, &nCompletedCaptures);
 
 
@@ -678,8 +677,6 @@ void StartRapidBlock(UNIT *unit, uint16_t preTrigger, uint16_t postTriggerMax,
 	// Get data
 	status = ps6000GetValuesBulk(unit->handle, &nSamples, 0, numWaveforms - 1, 
 			1, PS6000_RATIO_MODE_NONE, NULL);
-
-	cout << status << endl;
 	
 	// ps6000GetValuesTriggerTimeOffsetBulk64
 
