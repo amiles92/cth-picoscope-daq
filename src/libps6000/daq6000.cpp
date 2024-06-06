@@ -8,15 +8,6 @@
 #include <vector>
 #include <assert.h>
 
-
-#ifndef PS6000API
-#include <libps6000/ps6000Api.h>
-#endif
-
-#ifndef PICO_STATUS
-#include <libps6000/PicoStatus.h>
-#endif
-
 #ifndef PS6000WRAPPER
 #include "libps6000/ps6000Wrapper.h"
 #endif
@@ -224,10 +215,8 @@ void writeDataHeader(dataCollectionConfig &dcc)
     // 16 bits: number of samples before trigger
     // 32 bits: number of waveforms
     // total above bits: 224 (28 bytes)
-    // 8 bytes: model string
-    // 8 bytes (16 chars): serial number?
-    // MODEL STRING AND SERIAL AREN'T ZERO PADDED, NEED TO ENSURE 
-    // DATA DISTANCE IS CONSISTENT AND ADD THAT. OR GO 0 TERMINATED IN PY SIDE
+    // Flexible length, 0 terminated: model string
+    // Flexible length, 0 terminated: serial number
 
     int16_t o16;
     uint16_t ou16;
@@ -356,7 +345,7 @@ char* getSerials()
     return out;
 }
 
-PYBIND11_MODULE(daq, m)
+PYBIND11_MODULE(daq6000, m)
 {
     m.doc() = "Picoscope DAQ System";
 

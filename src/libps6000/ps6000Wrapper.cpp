@@ -137,7 +137,6 @@ void set_info(UNIT *unit)
 		switch (variant)
 		{
 			case MODEL_PS6402:
-				unit->model		= MODEL_PS6402;
 				unit->firstRange = PS6000_50MV;
 				unit->lastRange = PS6000_20V;
 				unit->channelCount = 4;
@@ -153,7 +152,6 @@ void set_info(UNIT *unit)
 				break;
 
 			case MODEL_PS6402A:
-				unit->model		= MODEL_PS6402A;
 				unit->firstRange = PS6000_50MV;
 				unit->lastRange = PS6000_20V;
 				unit->channelCount = 4;
@@ -169,7 +167,6 @@ void set_info(UNIT *unit)
 				break;
 
 			case MODEL_PS6402B:
-				unit->model		= MODEL_PS6402B;
 				unit->firstRange = PS6000_50MV;
 				unit->lastRange = PS6000_20V;
 				unit->channelCount = 4;
@@ -185,7 +182,6 @@ void set_info(UNIT *unit)
 				break;
 
 			case MODEL_PS6402C:
-				unit->model		= MODEL_PS6402C;
 				unit->firstRange = PS6000_50MV;
 				unit->lastRange = PS6000_20V;
 				unit->channelCount = 4;
@@ -201,7 +197,6 @@ void set_info(UNIT *unit)
 				break;
 
 			case MODEL_PS6402D:
-				unit->model		= MODEL_PS6402D;
 				unit->firstRange = PS6000_50MV;
 				unit->lastRange = PS6000_20V;
 				unit->channelCount = 4;
@@ -217,7 +212,6 @@ void set_info(UNIT *unit)
 				break;
 
 			case MODEL_PS6403:
-				unit->model		= MODEL_PS6403;
 				unit->firstRange = PS6000_50MV;
 				unit->lastRange = PS6000_20V;
 				unit->channelCount = 4;
@@ -233,7 +227,6 @@ void set_info(UNIT *unit)
 				break;
 
 			case MODEL_PS6403A:
-				unit->model		= MODEL_PS6403;
 				unit->firstRange = PS6000_50MV;
 				unit->lastRange = PS6000_20V;
 				unit->channelCount = 4;
@@ -249,7 +242,6 @@ void set_info(UNIT *unit)
 				break;
 
 			case MODEL_PS6403B:
-				unit->model		= MODEL_PS6403B;
 				unit->firstRange = PS6000_50MV;
 				unit->lastRange = PS6000_20V;
 				unit->channelCount = 4;
@@ -265,7 +257,6 @@ void set_info(UNIT *unit)
 				break;
 
 			case MODEL_PS6403C:
-				unit->model		= MODEL_PS6403C;
 				unit->firstRange = PS6000_50MV;
 				unit->lastRange = PS6000_20V;
 				unit->channelCount = 4;
@@ -281,7 +272,6 @@ void set_info(UNIT *unit)
 				break;
 
 			case MODEL_PS6403D:
-				unit->model		= MODEL_PS6403D;
 				unit->firstRange = PS6000_50MV;
 				unit->lastRange = PS6000_20V;
 				unit->channelCount = 4;
@@ -297,7 +287,6 @@ void set_info(UNIT *unit)
 				break;
 
 			case MODEL_PS6404:
-				unit->model		= MODEL_PS6404;
 				unit->firstRange = PS6000_50MV;
 				unit->lastRange = PS6000_20V;
 				unit->channelCount = 4;
@@ -313,7 +302,6 @@ void set_info(UNIT *unit)
 				break;
 
 			case MODEL_PS6404A:
-				unit->model		= MODEL_PS6404;
 				unit->firstRange = PS6000_50MV;
 				unit->lastRange = PS6000_20V;
 				unit->channelCount = 4;
@@ -329,7 +317,6 @@ void set_info(UNIT *unit)
 				break;
 
 			case MODEL_PS6404B:
-				unit->model		= MODEL_PS6404B;
 				unit->firstRange = PS6000_50MV;
 				unit->lastRange = PS6000_20V;
 				unit->channelCount = 4;
@@ -345,7 +332,6 @@ void set_info(UNIT *unit)
 				break;
 
 			case MODEL_PS6404C:
-				unit->model		= MODEL_PS6404C;
 				unit->firstRange = PS6000_50MV;
 				unit->lastRange = PS6000_20V;
 				unit->channelCount = 4;
@@ -361,7 +347,6 @@ void set_info(UNIT *unit)
 				break;
 
 			case MODEL_PS6404D:
-				unit->model		= MODEL_PS6404D;
 				unit->firstRange = PS6000_50MV;
 				unit->lastRange = PS6000_20V;
 				unit->channelCount = 4;
@@ -377,7 +362,6 @@ void set_info(UNIT *unit)
 				break;
 
 			case MODEL_PS6407:
-				unit->model		= MODEL_PS6407;
 				unit->firstRange = PS6000_100MV;
 				unit->lastRange = PS6000_100MV;
 				unit->channelCount = 4;

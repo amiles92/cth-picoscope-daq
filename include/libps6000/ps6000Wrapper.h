@@ -27,10 +27,6 @@
 #include <libps6000/PicoStatus.h>
 #endif
 
-
-// using namespace std;
-
-
 typedef enum enBOOL{FALSE,TRUE} BOOL;
 
 typedef enum {
@@ -84,7 +80,6 @@ typedef struct tPwq
 typedef struct
 {
 	int16_t handle;
-	MODEL_TYPE				model;
 	int8_t					modelString[8];
 	int8_t					serial[10];
 	int16_t					complete;
@@ -97,14 +92,6 @@ typedef struct
 	CHANNEL_SETTINGS		channelSettings [PS6000_MAX_CHANNELS];
 	int32_t					awgBufferSize;
 }UNIT;
-
-typedef struct tBufferInfo
-{
-	UNIT *unit;
-	int16_t **driverBuffers;
-	int16_t **appBuffers;
-
-} BUFFER_INFO;
 
 /****************************************************************************
 * Initialise unit' structure with Variant specific defaults

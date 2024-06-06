@@ -1,4 +1,5 @@
 import numpy as np
+import matplotlib.pyplot as plt
 
 ps6000VRanges = [10, 20, 50, 100, 200, 500, 1000, 2000, 5000, 
                  10000, 20000, 50000]
@@ -35,6 +36,14 @@ def bytesTwos(f,n):
         value -= 1 << n * 8
     return value
 
+def bytesString(f, n = 0): # xxx: if n = 0, read until 0 byte, else read n bytes
+    c = f.read(1)
+    s = ''
+    while c != b'\0':
+        s += c.decode()
+        c = f.read(1)
+    return s
+
 def adc2mv(value, range):
     return (value / 32512) * ps6000VRanges[range]
 
@@ -55,22 +64,10 @@ def readHeader(f):
         d['ch' + chr(ord('A') + i) + 'Samples'] = bytesInt(f,2)
     d['preTriggerSamples'] = bytesInt(f,2)
     d['numWaveforms'] = bytesInt(f,4)
+    d['timestamp'] = bytesInt(f,4)
     
-
-    c = f.read(1)
-    s = ''
-    while c != b'\0':
-        s += c.decode()
-        c = f.read(1)
-    d['modelNumber'] = s
-
-    c = f.read(1)
-    s = ''
-    while c != b'\0':
-        s += c.decode()
-        c = f.read(1)
-    
-    d['serialNumber'] = s
+    d['modelNumber'] = bytesString(f)
+    d['serialNumber'] = bytesString(f)
 
     return d
 
@@ -91,7 +88,7 @@ def readData(f, d):
     return data
 
 
-outFile = r"./out.dat"
+outFile = r"./example.dat"
 
 f = open(outFile, 'rb')
 
@@ -100,6 +97,8 @@ header = readHeader(f)
 data = readData(f, header)
 
 for chData in data:
-    print(chData.shape)
+    print(np.max(chData))
+    print(np.shape(chData))
 
-
+plt.plot(data[0][1000])
+plt.show()
