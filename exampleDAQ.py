@@ -1,10 +1,10 @@
-import daq6000 as daq
+import daq6000a as daq
 
 outFile = r"./example.dat"
 
 # serials = daq.getSerials()
-# picoscopes = ['IW098/0028']#serials.split(",")
-picoscopes = daq.getSerials().split(",")
+picoscopes = ['IW114/0004']#serials.split(",")
+# picoscopes = daq.getSerials().split(",")
 # if len(picoscopes) > 1:
 print(picoscopes)
 ps = 0

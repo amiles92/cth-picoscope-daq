@@ -45,7 +45,7 @@ public:
     }
 };
 
-dataCollectionConfig g_dcc(NULL, NULL);
+dataCollectionConfig g_dcc(NULL, (char*) "");
 
 void setActiveChannels(dataCollectionConfig &dcc, 
                        int16_t aChVoltage,
@@ -251,6 +251,10 @@ void writeDataHeader(dataCollectionConfig &dcc)
     o32 = bswap32(dcc.numWaveforms);
     dcc.ostream.write((const char *) &o32, sizeof(int32_t));
 
+    time_t t = time(nullptr);
+    o32 = bswap32((int32_t) t);
+    dcc.ostream.write((const char *) &o32, sizeof(int32_t));
+
     for (int i = 0; i < sizeof(dcc.unit->modelString); i++)
     {
         dcc.ostream.write((const char *) &dcc.unit->modelString[i], 1L);
@@ -321,6 +325,7 @@ int seriesSetDaqSettings(
     setTriggerConfig(g_dcc, chATrigger, chBTrigger, chCTrigger, chDTrigger, auxTrigger);
     setDataConfig(g_dcc, &timebase, &numWaveforms, &samplesPreTrigger, 
                 &chAWfSamples, &chBWfSamples, &chCWfSamples, &chDWfSamples);
+    return 1;
 }
 
 int seriesCollectData(char *outputFile)
@@ -329,11 +334,13 @@ int seriesCollectData(char *outputFile)
     setDataOutput(g_dcc, outputFile);
     writeDataHeader(g_dcc);
     writeDataOut(g_dcc);
+    return 1;
 }
 
 int seriesCloseDaq()
 {
     CloseDevice(g_dcc.unit);
+    return 1;
 }
 
 // to be run from python side
@@ -390,7 +397,7 @@ PYBIND11_MODULE(daq6000, m)
 {
     m.doc() = "Picoscope DAQ System";
 
-    m.def("runDAQ", &runFullDAQ, py::return_value_policy::copy); //, py::arg("outputFile"), 
+    m.def("runFullDAQ", &runFullDAQ, py::return_value_policy::copy); //, py::arg("outputFile"), 
     // py::arg("chATrigger"), py::arg("chAVRange"), py::arg("chAWfSamples"),
     // py::arg("chBTrigger"), py::arg("chBVRange"), py::arg("chBWfSamples"),
     // py::arg("chCTrigger"), py::arg("chCVRange"), py::arg("chCWfSamples"),

@@ -53,6 +53,8 @@ public:
     }
 };
 
+dataCollectionConfig g_dcc(NULL, (char*) "");
+
 void setActiveChannels(dataCollectionConfig &dcc, 
                        int16_t aChVoltage,
                        int16_t bChVoltage,
@@ -259,6 +261,10 @@ void writeDataHeader(dataCollectionConfig &dcc)
     o32 = bswap32(dcc.numWaveforms);
     dcc.ostream.write((const char *) &o32, sizeof(int32_t));
 
+    time_t t = time(nullptr);
+    o32 = bswap32((int32_t) t);
+    dcc.ostream.write((const char *) &o32, sizeof(int32_t));
+
     for (int i = 0; i < sizeof(dcc.unit->modelString); i++)
     {
         dcc.ostream.write((const char *) &dcc.unit->modelString[i], 1L);
@@ -297,8 +303,58 @@ void writeDataOut(dataCollectionConfig &dcc)
     }
 }
 
+int initSeriesDaq(char *serial)
+{
+    UNIT *unit;
+    if (serial == "") {serial = NULL;}
+    findUnit(unit, (int8_t*) serial);
+    try
+    {
+        g_dcc.unit = unit;
+        strcpy(g_dcc.serial, serial);
+    }
+    catch (exception e)
+    {
+        printf("Final Catch\n");
+        printf("Caught: %s\n", e.what());
+        CloseDevice(unit);
+        throw e;
+    }
+    return 1;
+}
+
+int seriesSetDaqSettings(
+            int16_t chATrigger, int16_t chAVRange, uint16_t chAWfSamples,
+            int16_t chBTrigger, int16_t chBVRange, uint16_t chBWfSamples,
+            int16_t chCTrigger, int16_t chCVRange, uint16_t chCWfSamples,
+            int16_t chDTrigger, int16_t chDVRange, uint16_t chDWfSamples,
+            int16_t auxTrigger, uint8_t timebase,
+            uint32_t numWaveforms, uint16_t samplesPreTrigger)
+{
+    setActiveChannels(g_dcc, chAVRange, chBVRange, chCVRange, chDVRange);
+    setTriggerConfig(g_dcc, chATrigger, chBTrigger, chCTrigger, chDTrigger, auxTrigger);
+    setDataConfig(g_dcc, &timebase, &numWaveforms, &samplesPreTrigger, 
+                &chAWfSamples, &chBWfSamples, &chCWfSamples, &chDWfSamples);
+    return 1;
+}
+
+int seriesCollectData(char *outputFile)
+{
+    collectRapidBlockData(g_dcc);
+    setDataOutput(g_dcc, outputFile);
+    writeDataHeader(g_dcc);
+    writeDataOut(g_dcc);
+    return 1;
+}
+
+int seriesCloseDaq()
+{
+    CloseDevice(g_dcc.unit);
+    return 1;
+}
+
 // to be run from python side
-int runDAQ(char *outputFile,
+int runFullDAQ(char *outputFile,
             int16_t chATrigger, int16_t chAVRange, uint16_t chAWfSamples,
             int16_t chBTrigger, int16_t chBVRange, uint16_t chBWfSamples,
             int16_t chCTrigger, int16_t chCVRange, uint16_t chCWfSamples,
@@ -308,9 +364,7 @@ int runDAQ(char *outputFile,
 {
     UNIT *unit;
     if (serial == "") {serial = NULL;}
-    cout << *serial << endl;
     findUnit(unit, (int8_t*) serial);
-    printf("Unit found\n");
     try
     {
         dataCollectionConfig dcc(unit, serial);
@@ -353,7 +407,7 @@ PYBIND11_MODULE(daq6000a, m)
 {
     m.doc() = "Picoscope DAQ System";
 
-    m.def("runDAQ", &runDAQ, py::return_value_policy::copy); //, py::arg("outputFile"), 
+    m.def("runFullDAQ", &runFullDAQ, py::return_value_policy::copy); //, py::arg("outputFile"), 
     // py::arg("chATrigger"), py::arg("chAVRange"), py::arg("chAWfSamples"),
     // py::arg("chBTrigger"), py::arg("chBVRange"), py::arg("chBWfSamples"),
     // py::arg("chCTrigger"), py::arg("chCVRange"), py::arg("chCWfSamples"),

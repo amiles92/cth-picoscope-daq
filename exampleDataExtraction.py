@@ -64,7 +64,7 @@ def readHeader(f):
         d['ch' + chr(ord('A') + i) + 'Samples'] = bytesInt(f,2)
     d['preTriggerSamples'] = bytesInt(f,2)
     d['numWaveforms'] = bytesInt(f,4)
-    d['timestamp'] = bytesInt(f,4)
+    d['timestamp'] = bytesTwos(f,4)
     
     d['modelNumber'] = bytesString(f)
     d['serialNumber'] = bytesString(f)
