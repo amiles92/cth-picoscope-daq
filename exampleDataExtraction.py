@@ -87,7 +87,6 @@ def readData(f, d):
 
     return data
 
-
 outFile = r"./example.dat"
 
 f = open(outFile, 'rb')

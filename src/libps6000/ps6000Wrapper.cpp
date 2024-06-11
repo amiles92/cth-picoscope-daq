@@ -648,10 +648,10 @@ void StartRapidBlock(UNIT *unit, uint16_t preTrigger, uint16_t postTriggerMax,
 
 	chrono::steady_clock::time_point end = std::chrono::steady_clock::now();
 
-	int time = chrono::duration_cast<std::chrono::microseconds>(end - begin).count();
+	int time = chrono::duration_cast<std::chrono::milliseconds>(end - begin).count();
 
 	printf("Time taken: %d us\n", time);
-	printf("Trigger rate: %f Hz\n", (double) numWaveforms / time * 1.0e6);
+	printf("Trigger rate: %f Hz\n", (double) numWaveforms / time * 1.0e3);
 
 	status = ps6000GetNoOfCaptures(unit->handle, &nCompletedCaptures);
 

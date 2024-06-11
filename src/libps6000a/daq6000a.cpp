@@ -308,7 +308,9 @@ int runDAQ(char *outputFile,
 {
     UNIT *unit;
     if (serial == "") {serial = NULL;}
+    cout << *serial << endl;
     findUnit(unit, (int8_t*) serial);
+    printf("Unit found\n");
     try
     {
         dataCollectionConfig dcc(unit, serial);
@@ -347,7 +349,7 @@ char* getSerials()
     return out;
 }
 
-PYBIND11_MODULE(daq6000, m)
+PYBIND11_MODULE(daq6000a, m)
 {
     m.doc() = "Picoscope DAQ System";
 

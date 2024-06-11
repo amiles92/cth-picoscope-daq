@@ -21,14 +21,6 @@ namespace py = pybind11;
 
 // typedef enum enBOOL{FALSE,TRUE} BOOL;
 
-uint8_t N;
-uint32_t numberWaveforms;
-uint32_t samplesPreTrigger;
-
-uint32_t	timebase = 8;
-int16_t		oversample = 1;
-int32_t      scaleVoltages = TRUE;
-
 class dataCollectionConfig 
 {
 public:
@@ -52,6 +44,8 @@ public:
         strcpy(this->serial, serial);
     }
 };
+
+dataCollectionConfig g_dcc(NULL, NULL);
 
 void setActiveChannels(dataCollectionConfig &dcc, 
                        int16_t aChVoltage,
@@ -295,8 +289,55 @@ void writeDataOut(dataCollectionConfig &dcc)
     }
 }
 
+int initSeriesDaq(char *serial)
+{
+    UNIT *unit;
+    if (serial == "") {serial = NULL;}
+    findUnit(unit, (int8_t*) serial);
+    try
+    {
+        g_dcc.unit = unit;
+        strcpy(g_dcc.serial, serial);
+    }
+    catch (exception e)
+    {
+        printf("Final Catch\n");
+        printf("Caught: %s\n", e.what());
+        CloseDevice(unit);
+        throw e;
+    }
+    return 1;
+}
+
+int seriesSetDaqSettings(
+            int16_t chATrigger, int16_t chAVRange, uint16_t chAWfSamples,
+            int16_t chBTrigger, int16_t chBVRange, uint16_t chBWfSamples,
+            int16_t chCTrigger, int16_t chCVRange, uint16_t chCWfSamples,
+            int16_t chDTrigger, int16_t chDVRange, uint16_t chDWfSamples,
+            int16_t auxTrigger, uint8_t timebase,
+            uint32_t numWaveforms, uint16_t samplesPreTrigger)
+{
+    setActiveChannels(g_dcc, chAVRange, chBVRange, chCVRange, chDVRange);
+    setTriggerConfig(g_dcc, chATrigger, chBTrigger, chCTrigger, chDTrigger, auxTrigger);
+    setDataConfig(g_dcc, &timebase, &numWaveforms, &samplesPreTrigger, 
+                &chAWfSamples, &chBWfSamples, &chCWfSamples, &chDWfSamples);
+}
+
+int seriesCollectData(char *outputFile)
+{
+    collectRapidBlockData(g_dcc);
+    setDataOutput(g_dcc, outputFile);
+    writeDataHeader(g_dcc);
+    writeDataOut(g_dcc);
+}
+
+int seriesCloseDaq()
+{
+    CloseDevice(g_dcc.unit);
+}
+
 // to be run from python side
-int runDAQ(char *outputFile,
+int runFullDAQ(char *outputFile,
             int16_t chATrigger, int16_t chAVRange, uint16_t chAWfSamples,
             int16_t chBTrigger, int16_t chBVRange, uint16_t chBWfSamples,
             int16_t chCTrigger, int16_t chCVRange, uint16_t chCWfSamples,
@@ -349,7 +390,7 @@ PYBIND11_MODULE(daq6000, m)
 {
     m.doc() = "Picoscope DAQ System";
 
-    m.def("runDAQ", &runDAQ, py::return_value_policy::copy); //, py::arg("outputFile"), 
+    m.def("runDAQ", &runFullDAQ, py::return_value_policy::copy); //, py::arg("outputFile"), 
     // py::arg("chATrigger"), py::arg("chAVRange"), py::arg("chAWfSamples"),
     // py::arg("chBTrigger"), py::arg("chBVRange"), py::arg("chBWfSamples"),
     // py::arg("chCTrigger"), py::arg("chCVRange"), py::arg("chCWfSamples"),

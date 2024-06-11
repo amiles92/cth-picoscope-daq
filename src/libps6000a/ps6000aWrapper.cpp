@@ -379,10 +379,10 @@ void StartRapidBlock(UNIT *unit, uint16_t preTrigger, uint16_t postTriggerMax,
 
 	chrono::steady_clock::time_point end = std::chrono::steady_clock::now();
 
-	int time = chrono::duration_cast<std::chrono::microseconds>(end - begin).count();
+	int time = chrono::duration_cast<std::chrono::milliseconds>(end - begin).count();
 
 	printf("Time taken: %d us\n", time);
-	printf("Trigger rate: %f Hz\n", (double) numWaveforms / time * 1.0e6);
+	printf("Trigger rate: %f Hz\n", (double) numWaveforms / time * 1.0e3);
 
 	status = ps6000aGetNoOfCaptures(unit->handle, &nCompletedCaptures);
 
@@ -414,11 +414,15 @@ PICO_STATUS OpenDevice(UNIT *unit, int8_t *serial)
 	}
 	else
 	{
-		status = ps6000aOpenUnit(&unit->handle, serial, PICO_DR_8BIT);
+		printf("Attempting to open\n");
+		status = ps6000aOpenUnit(&(unit->handle), serial, PICO_DR_8BIT);
+		printf("Opened\n");
 	}
 
 	unit->openStatus = status;
 	unit->complete = 1;
+
+	printf("Opened and set values to unit\n");
 
 	return status;
 }
@@ -457,6 +461,8 @@ void findUnit(UNIT *unit, int8_t *serial)
 	}
 
 	PICO_STATUS status = OpenDevice(unit, serial);
+
+	printf("Open status: %d", status);
 
 	if (status == PICO_OK || status == PICO_USB3_0_DEVICE_NON_USB3_0_PORT)
 	{
