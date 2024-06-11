@@ -208,6 +208,7 @@ void writeDataHeader(dataCollectionConfig &dcc)
     // 64 (4*16) bits: number of TOTAL samples per waveform (including pretrigger)
     // 16 bits: number of samples before trigger
     // 32 bits: number of waveforms
+    // 32 bits: unix timestamp (signed integer)
     // total above bits: 224 (28 bytes)
     // Flexible length, 0 terminated: model string
     // Flexible length, 0 terminated: serial number
