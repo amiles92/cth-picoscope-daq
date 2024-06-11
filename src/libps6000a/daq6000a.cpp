@@ -217,11 +217,9 @@ void writeDataHeader(dataCollectionConfig &dcc)
     // 16 bits: number of samples before trigger
     // 32 bits: number of waveforms
     // 32 bits: unix timestamp (signed integer)
-    // total above bits: 224 (28 bytes)
-    // 8 bytes: model string
-    // 8 bytes (16 chars): serial number?
-    // MODEL STRING AND SERIAL AREN'T ZERO PADDED, NEED TO ENSURE 
-    // DATA DISTANCE IS CONSISTENT AND ADD THAT. OR GO 0 TERMINATED IN PY SIDE
+    // total above bits: 232 (29 bytes)
+    // Flexible length, 0 terminated: model string
+    // Flexible length, 0 terminated: serial number
 
     int16_t o16;
     uint16_t ou16;
@@ -304,7 +302,7 @@ void writeDataOut(dataCollectionConfig &dcc)
     }
 }
 
-int initSeriesDaq(char *serial)
+int seriesInitDaq(char *serial)
 {
     UNIT *unit;
     if (serial == "") {serial = NULL;}
@@ -406,15 +404,13 @@ char* getSerials()
 
 PYBIND11_MODULE(daq6000a, m)
 {
-    m.doc() = "Picoscope DAQ System";
+    m.doc() = "Picoscope 6000a DAQ System";
 
-    m.def("runFullDAQ", &runFullDAQ, py::return_value_policy::copy); //, py::arg("outputFile"), 
-    // py::arg("chATrigger"), py::arg("chAVRange"), py::arg("chAWfSamples"),
-    // py::arg("chBTrigger"), py::arg("chBVRange"), py::arg("chBWfSamples"),
-    // py::arg("chCTrigger"), py::arg("chCVRange"), py::arg("chCWfSamples"),
-    // py::arg("chDTrigger"), py::arg("chDVRange"), py::arg("chDWfSamples"), 
-    // py::arg("auxTrigger"), py::arg("timebase"), py::arg("numWaveforms"), 
-    // py::arg("samplesPreTrigger"), py::arg("serials"));
+    m.def("runFullDAQ", &runFullDAQ, py::return_value_policy::copy);
+    m.def("seriesInitDAQ", &seriesInitDaq, py::return_value_policy::copy);
+    m.def("seriesSetDaqSettings", &seriesSetDaqSettings, py::return_value_policy::copy);
+    m.def("seriesCollectData", &seriesCollectData, py::return_value_policy::copy);
+    m.def("seriesCloseDaq", &seriesCloseDaq, py::return_value_policy::copy);
     m.def("getSerials", &getSerials, py::return_value_policy::copy);
 }
 
