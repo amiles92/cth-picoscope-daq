@@ -340,6 +340,8 @@ int seriesInitDaq(char *serial)
         printf("Caught: %s\n", e.what());
         CloseDevice(g_dcc.unit);
         g_dcc.unitInitialised = FALSE;
+        g_dcc.unitInitialised = FALSE;
+        g_dcc.dataConfigured = FALSE;
         g_dcc.dataConfigured = FALSE;
         throw e;
     }
@@ -391,8 +393,9 @@ int seriesCollectData(char *outputFile)
         writeDataHeader(g_dcc);
         writeDataOut(g_dcc);
         closeDataOutput(g_dcc);
-        resetDataBuffers(g_dcc);
         printf("Written to file: %s\n", outputFile);
+        resetDataBuffers(g_dcc);
+        printf("Daq finished\n\n");
         return 1;
     }
     catch (exception e)

@@ -399,8 +399,9 @@ int seriesCollectData(char *outputFile)
         writeDataHeader(g_dcc);
         writeDataOut(g_dcc);
         closeDataOutput(g_dcc);
-        resetDataBuffers(g_dcc);
         printf("Written to file: %s\n", outputFile);
+        resetDataBuffers(g_dcc);
+        printf("Data buffers refreshed\n");
         return 1;
     }
     catch (exception e)
