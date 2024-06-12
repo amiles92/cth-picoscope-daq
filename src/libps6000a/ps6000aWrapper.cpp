@@ -200,16 +200,19 @@ void SetTimebase(UNIT *unit, uint8_t timebase, uint16_t maxChSamples) // Don't n
 }
 
 vector<vector<int16_t*>> SetDataBuffers(UNIT *unit, bitset<4> activeChannels, 
-	vector<uint16_t> samplesPerChannel, uint16_t samplesPreTrigger, 
+	vector<uint16_t> samplesPostPerChannel, uint16_t samplesPreTrigger, 
 	uint32_t numWaveforms, uint16_t maxPostSamples)
 {//Using rapid block mode only for now
 	vector<vector<int16_t*>> outBuffers(activeChannels.count());
 
-	uint32_t nMaxSamples = activeChannels.count() * maxPostSamples;
+	uint64_t nMaxSamples = activeChannels.count() * maxPostSamples;
 	uint64_t picoMaxSamples;
-	PICO_STATUS status = ps6000aMemorySegments(unit->handle, numWaveforms, &picoMaxSamples);
+	uint64_t numWaveforms64 = numWaveforms;
+
+	PICO_STATUS status = ps6000aMemorySegments(unit->handle, numWaveforms64, &picoMaxSamples);
 	if (status != PICO_OK)
 	{
+		printf("PICO status code: %d\n", status);
 		throw "Improperly set pico memory segments";
 	}
 	if (picoMaxSamples < nMaxSamples)
@@ -218,7 +221,7 @@ vector<vector<int16_t*>> SetDataBuffers(UNIT *unit, bitset<4> activeChannels,
 		printf("The program will still run with samples truncated\n"); //XXX: everything here
 		printf("Pester Alex to add partial collections if it becomes a problem\n\n\n");		
 	}
-	ps6000aSetNoOfCaptures(unit->handle, numWaveforms);
+	ps6000aSetNoOfCaptures(unit->handle, numWaveforms64);
 
 	PICO_ACTION action = (PICO_ACTION) (PICO_CLEAR_ALL | PICO_ADD);
 
@@ -226,15 +229,15 @@ vector<vector<int16_t*>> SetDataBuffers(UNIT *unit, bitset<4> activeChannels,
 	{
 		if (!activeChannels.test(i)) {continue;}
 
-		uint16_t chSamples = samplesPreTrigger + samplesPerChannel.at(i);
+		uint32_t chSamples = samplesPreTrigger + samplesPostPerChannel.at(i);
 		outBuffers.at(i) = vector<int16_t*>(numWaveforms);
 
-		for (int j = 0; j < numWaveforms; j++)
+		for (uint64_t j = 0; j < numWaveforms; j++)
 		{
 			outBuffers.at(i).at(j) = (int16_t*) calloc(chSamples, sizeof(int16_t));
 			if (outBuffers.at(i).at(j) == NULL)
 			{
-				printf("Memory allocation failed: Ch %d, Wf %d\n", i, j);
+				printf("Memory allocation failed: Ch %d, Wf %d\n", i, (int) j);
 			}
 			ps6000aSetDataBuffer(unit->handle, (PICO_CHANNEL) (i),
 				outBuffers.at(i).at(j), chSamples, PICO_INT16_T, j, 
@@ -300,7 +303,7 @@ void SetTriggers(UNIT *unit, bitset<5> triggers, vector<int16_t> chThreshold, in
 	}
 	else
 	{
-		printf("multi trig (will fail since unimplemented)\n");
+		printf("multi trig (currently unimplemented)\n");
 		// SetMultiTriggerSettings(unit, triggers, chThreshold, auxThreshold);
 	}
 	return;
@@ -350,12 +353,15 @@ void StartRapidBlock(UNIT *unit, uint16_t preTrigger, uint16_t postTriggerMax,
 	PICO_STATUS status;
 	double timeIndisposed;
 	uint64_t nCompletedCaptures;
+	uint32_t timebase32 = timebase;
+	uint64_t preTrigger64 = preTrigger;
+	uint64_t postTriggerMax64 = postTriggerMax;
 
 	printf("\n\nStarting DAQ\n\n");
 
 	chrono::steady_clock::time_point begin = std::chrono::steady_clock::now();
 
-	ps6000aRunBlock(unit->handle, preTrigger, postTriggerMax, timebase,
+	ps6000aRunBlock(unit->handle, preTrigger64, postTriggerMax64, timebase32,
 			&timeIndisposed, 0, CallBackBlock, NULL);
 	g_ready = FALSE;
 
@@ -369,6 +375,7 @@ void StartRapidBlock(UNIT *unit, uint16_t preTrigger, uint16_t postTriggerMax,
 		_getch();
 		status = ps6000aStop(unit->handle);
 		status = ps6000aGetNoOfCaptures(unit->handle, &nCompletedCaptures);
+		CloseDevice(unit);
 
 		printf("Rapid capture aborted. %d complete blocks were captured\n", (int) nCompletedCaptures);
 		printf("Early abort writeout not yet supported\n");
@@ -381,7 +388,7 @@ void StartRapidBlock(UNIT *unit, uint16_t preTrigger, uint16_t postTriggerMax,
 
 	int time = chrono::duration_cast<std::chrono::milliseconds>(end - begin).count();
 
-	printf("Time taken: %d us\n", time);
+	printf("Time taken: %d ms\n", time);
 	printf("Trigger rate: %f Hz\n", (double) numWaveforms / time * 1.0e3);
 
 	status = ps6000aGetNoOfCaptures(unit->handle, &nCompletedCaptures);
@@ -414,15 +421,11 @@ PICO_STATUS OpenDevice(UNIT *unit, int8_t *serial)
 	}
 	else
 	{
-		printf("Attempting to open\n");
 		status = ps6000aOpenUnit(&(unit->handle), serial, PICO_DR_8BIT);
-		printf("Opened\n");
 	}
 
 	unit->openStatus = status;
 	unit->complete = 1;
-
-	printf("Opened and set values to unit\n");
 
 	return status;
 }
@@ -461,8 +464,6 @@ void findUnit(UNIT *unit, int8_t *serial)
 	}
 
 	PICO_STATUS status = OpenDevice(unit, serial);
-
-	printf("Open status: %d", status);
 
 	if (status == PICO_OK || status == PICO_USB3_0_DEVICE_NON_USB3_0_PORT)
 	{

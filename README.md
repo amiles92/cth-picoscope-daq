@@ -10,9 +10,9 @@
   pybind11-config
   ```
 * gcc-11 for PyBind11
-* PicoScope libraries (only made for ps6000 for the moment)
+* PicoScope libraries (only made for ps6000 and ps6000a for the moment)
   ```sh
-  sudo apt install libps6000
+  sudo apt install libps6000 libps6000a
   ```
 * Python3 (3.10 might specifically be required but you can probably just change the make line to fix this)
 

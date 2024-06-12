@@ -45,7 +45,11 @@ public:
     uint16_t samplesPreTrigger;
     uint32_t numWaveforms;
     vector<vector<int16_t*>> dataBuffers;
-    char serial[16];
+
+    BOOL dataConfigured = FALSE;
+    BOOL unitInitialised = FALSE;
+
+    char serial[32];
     dataCollectionConfig(UNIT *unit, char *serial)
     {
         this->unit = unit;
@@ -53,7 +57,8 @@ public:
     }
 };
 
-dataCollectionConfig g_dcc(NULL, (char*) "");
+UNIT g_unit;
+dataCollectionConfig g_dcc(&g_unit, (char*) "");
 
 void setActiveChannels(dataCollectionConfig &dcc, 
                        int16_t aChVoltage,
@@ -97,17 +102,19 @@ void setTriggerConfig(dataCollectionConfig &dcc,
                                 auxTrigVoltageMv
                                 };
 
+    vector<int16_t> chTriggerThresholdADC;
+
     for (int i = 0; i < 4; i++)
     {
         if (trigVoltageMv[i] != 0 && dcc.activeChannels.test(i))
         {
             dcc.activeTriggers.set(i + 1);
-            dcc.chTriggerThresholdADC.push_back(mv_to_adc(trigVoltageMv[i], 
+            chTriggerThresholdADC.push_back(mv_to_adc(trigVoltageMv[i], 
             dcc.unit->channelSettings[PICO_CHANNEL_A + i].range, dcc.unit));
         }
         else
         {
-            dcc.chTriggerThresholdADC.push_back(0);
+            chTriggerThresholdADC.push_back(0);
         }
     }
     if (trigVoltageMv[4] != 0)
@@ -120,6 +127,7 @@ void setTriggerConfig(dataCollectionConfig &dcc,
         dcc.auxTriggerThresholdADC = 0;
     }
 
+    dcc.chTriggerThresholdADC = chTriggerThresholdADC;
     SetTriggers(dcc.unit, dcc.activeTriggers, dcc.chTriggerThresholdADC, dcc.auxTriggerThresholdADC);
 
     return;
@@ -133,15 +141,32 @@ void setDataConfig(dataCollectionConfig &dcc, uint8_t *timebase,
     dcc.numWaveforms = *numWaveforms;
     dcc.samplesPreTrigger = *samplesPreTrigger;
 
-    vector<uint16_t> samplesPerWaveform = {*chAWfSamples, *chBWfSamples, *chCWfSamples, *chDWfSamples};
-    dcc.chPostSamplesPerWaveform = samplesPerWaveform;
+    vector<uint16_t> samplesPostPerWaveform = {*chAWfSamples, *chBWfSamples, *chCWfSamples, *chDWfSamples};
+    dcc.chPostSamplesPerWaveform = samplesPostPerWaveform;
     dcc.maxPostSamples = *max_element(  dcc.chPostSamplesPerWaveform.begin(),
                                         dcc.chPostSamplesPerWaveform.end());
 
-    dcc.dataBuffers = SetDataBuffers(dcc.unit, dcc.activeChannels, samplesPerWaveform, 
-            *samplesPreTrigger, *numWaveforms, dcc.maxPostSamples);
+    dcc.dataBuffers = SetDataBuffers(dcc.unit, dcc.activeChannels, dcc.chPostSamplesPerWaveform, 
+            dcc.samplesPreTrigger, dcc.numWaveforms, dcc.maxPostSamples);
 
     return;
+}
+
+void freeDataBuffers(dataCollectionConfig &dcc)
+{
+    for (int i = 0; i < dcc.activeChannels.count(); i++)
+    {
+        for (int j = 0; j < dcc.numWaveforms; j++)
+        {
+            free(dcc.dataBuffers.at(i).at(j));
+        }
+    }
+}
+
+void resetDataBuffers(dataCollectionConfig &dcc)
+{
+    dcc.dataBuffers = SetDataBuffers(dcc.unit, dcc.activeChannels, dcc.chPostSamplesPerWaveform, 
+            dcc.samplesPreTrigger, dcc.numWaveforms, dcc.maxPostSamples);
 }
 
 void collectRapidBlockData(dataCollectionConfig &dcc)
@@ -156,6 +181,12 @@ void collectRapidBlockData(dataCollectionConfig &dcc)
 void setDataOutput(dataCollectionConfig &dcc, char *outputFileName)
 {
     dcc.ostream.open(outputFileName, ios::out | ios::binary);
+    return;
+}
+
+void closeDataOutput(dataCollectionConfig &dcc)
+{
+    dcc.ostream.close();
     return;
 }
 
@@ -270,10 +301,11 @@ void writeDataHeader(dataCollectionConfig &dcc)
         if (dcc.unit->modelString[i] == '\0') {break;}
     }
 
-    dcc.ostream.write((const char *) &dcc.serial, sizeof(&dcc.serial));
-
-    char zero = '\0';
-    dcc.ostream.write(&zero, 1L);
+    for (int i = 0; i < sizeof(dcc.serial); i++)
+    {
+        dcc.ostream.write((const char *) &dcc.serial[i], 1L);
+        if (dcc.unit->serial[i] == '\0') {break;}
+    }
 
     return;
 }
@@ -297,26 +329,26 @@ void writeDataOut(dataCollectionConfig &dcc)
                 o16 = bswap16((dcc.dataBuffers.at(i).at(j))[k]);
                 dcc.ostream.write((const char*) &o16, s);
             }
-            free(dcc.dataBuffers.at(i).at(j));
         }
     }
 }
 
 int seriesInitDaq(char *serial)
 {
-    UNIT *unit;
     if (serial == "") {serial = NULL;}
-    findUnit(unit, (int8_t*) serial);
+    findUnit(g_dcc.unit, (int8_t*) serial);
     try
     {
-        g_dcc.unit = unit;
         strcpy(g_dcc.serial, serial);
+        g_dcc.unitInitialised = TRUE;
     }
     catch (exception e)
     {
         printf("Final Catch\n");
         printf("Caught: %s\n", e.what());
-        CloseDevice(unit);
+        CloseDevice(g_dcc.unit);
+        g_dcc.unitInitialised = FALSE;
+        g_dcc.dataConfigured = FALSE;
         throw e;
     }
     return 1;
@@ -330,25 +362,70 @@ int seriesSetDaqSettings(
             int16_t auxTrigger, uint8_t timebase,
             uint32_t numWaveforms, uint16_t samplesPreTrigger)
 {
-    setActiveChannels(g_dcc, chAVRange, chBVRange, chCVRange, chDVRange);
-    setTriggerConfig(g_dcc, chATrigger, chBTrigger, chCTrigger, chDTrigger, auxTrigger);
-    setDataConfig(g_dcc, &timebase, &numWaveforms, &samplesPreTrigger, 
+    if (g_dcc.unitInitialised == FALSE)
+    {
+        return 0;
+    }
+    try
+    {
+        setActiveChannels(g_dcc, chAVRange, chBVRange, chCVRange, chDVRange);
+        setTriggerConfig(g_dcc, chATrigger, chBTrigger, chCTrigger, chDTrigger, auxTrigger);
+        setDataConfig(g_dcc, &timebase, &numWaveforms, &samplesPreTrigger, 
                 &chAWfSamples, &chBWfSamples, &chCWfSamples, &chDWfSamples);
+        g_dcc.dataConfigured = TRUE;
+    }
+    catch (exception e)
+    {
+        printf("Final Catch\n");
+        printf("Caught: %s\n", e.what());
+        CloseDevice(g_dcc.unit);
+        g_dcc.unitInitialised = FALSE;
+        g_dcc.dataConfigured = FALSE;
+        throw e;
+    }
     return 1;
 }
 
 int seriesCollectData(char *outputFile)
 {
-    collectRapidBlockData(g_dcc);
-    setDataOutput(g_dcc, outputFile);
-    writeDataHeader(g_dcc);
-    writeDataOut(g_dcc);
-    return 1;
+    if ((g_dcc.unitInitialised == FALSE) || (g_dcc.dataConfigured = FALSE))
+    {
+        return 0;
+    }
+    try
+    {
+        collectRapidBlockData(g_dcc);
+        setDataOutput(g_dcc, outputFile);
+        writeDataHeader(g_dcc);
+        writeDataOut(g_dcc);
+        closeDataOutput(g_dcc);
+        resetDataBuffers(g_dcc);
+        printf("Written to file: %s\n", outputFile);
+        return 1;
+    }
+    catch (exception e)
+    {
+        printf("Final Catch\n");
+        printf("Caught: %s\n", e.what());
+        CloseDevice(g_dcc.unit);
+        g_dcc.unitInitialised = FALSE;
+        g_dcc.dataConfigured = FALSE;
+        throw e;
+    }
 }
 
 int seriesCloseDaq()
 {
-    CloseDevice(g_dcc.unit);
+    if (g_dcc.unitInitialised)
+    {
+        CloseDevice(g_dcc.unit);
+        g_dcc.unitInitialised = FALSE;
+    }
+    if (g_dcc.dataConfigured)
+    {
+        freeDataBuffers(g_dcc);
+        g_dcc.dataConfigured = FALSE;
+    }
     return 1;
 }
 
@@ -376,6 +453,7 @@ int runFullDAQ(char *outputFile,
         setDataOutput(dcc, outputFile);
         writeDataHeader(dcc);
         writeDataOut(dcc);
+        closeDataOutput(dcc);
         printf("Data written to %s\n", outputFile);
         CloseDevice(unit);
         printf("Device closed\n");
@@ -407,7 +485,7 @@ PYBIND11_MODULE(daq6000a, m)
     m.doc() = "Picoscope 6000a DAQ System";
 
     m.def("runFullDAQ", &runFullDAQ, py::return_value_policy::copy);
-    m.def("seriesInitDAQ", &seriesInitDaq, py::return_value_policy::copy);
+    m.def("seriesInitDaq", &seriesInitDaq, py::return_value_policy::copy);
     m.def("seriesSetDaqSettings", &seriesSetDaqSettings, py::return_value_policy::copy);
     m.def("seriesCollectData", &seriesCollectData, py::return_value_policy::copy);
     m.def("seriesCloseDaq", &seriesCloseDaq, py::return_value_policy::copy);

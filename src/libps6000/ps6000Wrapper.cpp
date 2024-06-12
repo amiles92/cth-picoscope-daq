@@ -457,7 +457,7 @@ void SetTimebase(UNIT *unit, uint8_t timebase, uint16_t maxChSamples) // Don't n
 }
 
 vector<vector<int16_t*>> SetDataBuffers(UNIT *unit, bitset<4> activeChannels, 
-	vector<uint16_t> samplesPerChannel, uint16_t samplesPreTrigger, 
+	vector<uint16_t> samplesPostPerChannel, uint16_t samplesPreTrigger, 
 	uint32_t numWaveforms, uint16_t maxPostSamples)
 {//Using rapid block mode only for now
 	vector<vector<int16_t*>> outBuffers(activeChannels.count());
@@ -476,7 +476,7 @@ vector<vector<int16_t*>> SetDataBuffers(UNIT *unit, bitset<4> activeChannels,
 	{
 		if (!activeChannels.test(i)) {continue;}
 
-		uint16_t chSamples = samplesPreTrigger + samplesPerChannel.at(i);
+		uint16_t chSamples = samplesPreTrigger + samplesPostPerChannel.at(i);
 		outBuffers.at(i) = vector<int16_t*>(numWaveforms);
 
 		for (int j = 0; j < numWaveforms; j++)
@@ -650,7 +650,7 @@ void StartRapidBlock(UNIT *unit, uint16_t preTrigger, uint16_t postTriggerMax,
 
 	int time = chrono::duration_cast<std::chrono::milliseconds>(end - begin).count();
 
-	printf("Time taken: %d us\n", time);
+	printf("Time taken: %d ms\n", time);
 	printf("Trigger rate: %f Hz\n", (double) numWaveforms / time * 1.0e3);
 
 	status = ps6000GetNoOfCaptures(unit->handle, &nCompletedCaptures);
