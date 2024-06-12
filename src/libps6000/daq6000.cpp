@@ -17,9 +17,6 @@
 
 using namespace std;
 namespace py = pybind11;
-// constexpr auto byref = py::return_value_policy::reference_internal;
-
-// typedef enum enBOOL{FALSE,TRUE} BOOL;
 
 class dataCollectionConfig 
 {
@@ -340,8 +337,6 @@ int seriesInitDaq(char *serial)
         printf("Caught: %s\n", e.what());
         CloseDevice(g_dcc.unit);
         g_dcc.unitInitialised = FALSE;
-        g_dcc.unitInitialised = FALSE;
-        g_dcc.dataConfigured = FALSE;
         g_dcc.dataConfigured = FALSE;
         throw e;
     }
@@ -360,7 +355,7 @@ int seriesSetDaqSettings(
     {
         return 0;
     }
-    try 
+    try
     {
         setActiveChannels(g_dcc, chAVRange, chBVRange, chCVRange, chDVRange);
         setTriggerConfig(g_dcc, chATrigger, chBTrigger, chCTrigger, chDTrigger, auxTrigger);

@@ -17,17 +17,6 @@
 
 using namespace std;
 namespace py = pybind11;
-// constexpr auto byref = py::return_value_policy::reference_internal;
-
-// typedef enum enBOOL{FALSE,TRUE} BOOL;
-
-uint8_t N;
-uint32_t numberWaveforms;
-uint32_t samplesPreTrigger;
-
-uint32_t	timebase = 8;
-int16_t		oversample = 1;
-int32_t      scaleVoltages = TRUE;
 
 class dataCollectionConfig 
 {
@@ -238,8 +227,7 @@ void writeDataHeader(dataCollectionConfig &dcc)
     // Bit layout, in order
     // 4 bits: timebase (from 0-4 for ps6000)
     // 4 bits: ch1-4 active
-    // 1 bit: padding
-    // 2 bits: resolution and data size: 0=8bit:int8,(1=8bit,2=10bit,3=12bit):int16
+    // 3 bits: padding
     // 5 bits: ch1-4, aux trigger active
     // 16 bits: aux trigger threshold
     // 64 (16*4) bits: trigger threshold (ch1-4)
@@ -401,7 +389,7 @@ int seriesCollectData(char *outputFile)
         closeDataOutput(g_dcc);
         printf("Written to file: %s\n", outputFile);
         resetDataBuffers(g_dcc);
-        printf("Data buffers refreshed\n");
+        printf("Daq finished\n\n");
         return 1;
     }
     catch (exception e)
