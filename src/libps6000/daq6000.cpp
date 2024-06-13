@@ -256,6 +256,9 @@ void writeDataHeader(dataCollectionConfig &dcc)
     uint8_t activeTriggers = (uint8_t) dcc.activeTriggers.to_ullong();
     dcc.ostream.write((const char *) &activeTriggers, sizeof(uint8_t));
 
+    bitset_reverse(dcc.activeChannels);
+    bitset_reverse(dcc.activeTriggers);
+
     o16 = bswap16(dcc.auxTriggerThresholdADC);
     dcc.ostream.write((const char *) &o16, sizeof(int16_t));
 
