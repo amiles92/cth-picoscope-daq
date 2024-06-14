@@ -171,23 +171,34 @@ void collectRapidBlockData(dataCollectionConfig &dcc)
 void collectMultiRapidBlockData(vector<dataCollectionConfig> &vecDcc)
 {
     int32_t vecLength = vecDcc.size();
-    vector<UNIT *> vecUnit(vecLength);
-    vector<uint16_t> vecSamplesPreTrigger(vecLength);
-    vector<uint16_t> vecMaxPostTrigger(vecLength);
-    vector<uint8_t> vecTimebase(vecLength);
-    vector<uint32_t> vecNumWaveforms(vecLength);
+    vector<UNIT *> vecUnit;
+    vector<uint16_t> vecSamplesPreTrigger;
+    vector<uint16_t> vecMaxPostTrigger;
+    vector<uint8_t> vecTimebase;
+    vector<uint32_t> vecNumWaveforms;
 
     for (int i = 0; i < vecLength; i++)
     {
+        if (vecDcc.at(i).dataConfigured == FALSE) // unit should always be initialised in vector
+        {
+            printf("Unit %s has not been given daq settings",vecDcc.at(i).serial);
+            continue;
+        }
+
         uint16_t maxPostTrigger = *max_element( 
                 vecDcc.at(i).chPostSamplesPerWaveform.begin(),
                 vecDcc.at(i).chPostSamplesPerWaveform.end());
 
-        vecUnit.at(i) = vecDcc.at(i).unit;
-        vecSamplesPreTrigger.at(i) = vecDcc.at(i).samplesPreTrigger;
-        vecMaxPostTrigger.at(i) = maxPostTrigger;
-        vecTimebase.at(i) = vecDcc.at(i).timebase.to_ulong();
-        vecNumWaveforms.at(i) = vecDcc.at(i).numWaveforms;
+        vecUnit.push_back(vecDcc.at(i).unit);
+        vecSamplesPreTrigger.push_back(vecDcc.at(i).samplesPreTrigger);
+        vecMaxPostTrigger.push_back(maxPostTrigger);
+        vecTimebase.push_back(vecDcc.at(i).timebase.to_ulong());
+        vecNumWaveforms.push_back(vecDcc.at(i).numWaveforms);
+    }
+    if (vecUnit.size() == 0)
+    {
+        printf("No units with daq settings enabled\n");
+        return;
     }
     StartMultiRapidBlock(vecUnit, vecSamplesPreTrigger, vecMaxPostTrigger,
             vecTimebase, vecNumWaveforms);

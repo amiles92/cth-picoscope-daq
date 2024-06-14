@@ -339,7 +339,6 @@ int32_t _kbhit()
         return bytesWaiting;
 }
 
-
 void StartRapidBlock(UNIT *unit, uint16_t preTrigger, uint16_t postTriggerMax,
 	uint8_t timebase, uint32_t numWaveforms)
 {
@@ -410,6 +409,21 @@ void StartMultiRapidBlock(vector<UNIT *> vecUnit, vector<uint16_t> vecPreTrigger
 {
 	uint8_t len = vecUnit.size();
 	// __builtin_popcount(x)
+	// Start timer
+	// Run
+	// 
+
+	g_multiReady = 0;
+
+	printf("\n\nStarting DAQ\n\n");
+
+	chrono::steady_clock::time_point begin = std::chrono::steady_clock::now();
+
+	for (int i = 0; i < len; i++)
+	{
+		ps6000aRunBlock(unit->handle, preTrigger64, postTriggerMax64, timebase32,
+			&timeIndisposed, 0, CallBackBlock, NULL);
+	}
 }
 
 PICO_STATUS OpenDevice(UNIT *unit, int8_t *serial)
@@ -551,6 +565,15 @@ void PREF4 CallBackBlock(int16_t handle, PICO_STATUS status, void * pParameter)
 	if (status != PICO_CANCELLED)
 	{
 		g_ready = TRUE;
+	}
+}
+
+void PREF4 MultiCallBackBlock(int16_t handle, PICO_STATUS status, void *pParameter)
+{
+	int8_t *runId = (int8_t *) pParameter;
+	if (status != PICO_CANCELLED)
+	{
+		g_multiReady |= 1 << *runId;
 	}
 }
 
