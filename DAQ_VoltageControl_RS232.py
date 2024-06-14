@@ -330,8 +330,8 @@ while(EndFlag==0):
             		
             	else:
             		print(DAQ_default, " is not a valid input")
-                if (DAQ_ParamsLoaded=1):
-                    print("DAQ settings loaded.")
+            	if (DAQ_ParamsLoaded==1):
+            		print("DAQ settings loaded.")
                 
                 
             elif(VComm=="StartDAQ"):
@@ -340,7 +340,7 @@ while(EndFlag==0):
             	else:       	
             		try:
             			print("Input name for the DAQ output file:")
-            			DAQ_outFile = r"./"+str(input())+".dat"
+            			DAQ_outFile = r"./data/"+str(input())+".dat"
             			print("DAQ output file:", DAQ_outFile) 
             			daq.seriesCollectData(DAQ_outFile)
             		except:
@@ -389,5 +389,6 @@ if(CompFlag==1): VoltageRead=CurrentVoltage #if an error code is being read, can
 if(VoltageRead>0.0):ZeroVoltage(VoltageRead,instrument)
 print("")
 print("Voltage ramp complete!")
+print("==============================================================================")
 ##########################################################################################################
 instrument.clear()
