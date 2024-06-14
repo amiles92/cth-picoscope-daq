@@ -2,8 +2,9 @@
 # -*- coding: utf-8 -*-
 """
 Created on Mon 29/06/2020
-Last Updated: Mon 04/07/22
 Author: Sam Dekkers
+Last Update by Sam Dekkers: Mon 04/07/22
+DAQ options implemented on 14/06/2024 by Thomas Clouvel
 
 Script for ramping up voltage on Keithley 6487 Picoammeter via an RS232 connection
 
@@ -257,7 +258,8 @@ while(EndFlag==0):
     if(CompFlag==0):
         CommandFlag=0
         while(CommandFlag==0):
-            print("Enter next voltage command (enter ""L"" for options): ")
+            print("==============================================================================")
+            print("Enter next command (enter ""L"" for options): ")
             VComm = str(input())
             if(VComm=="L"):
                 print("")
@@ -284,7 +286,7 @@ while(EndFlag==0):
             		print("chDTrigger,chDVRange,chDWfSamples,")
             		print("auxTrigger,timebase,numWaveforms,samplesPreTrigger")
             		try:
-            			DAQ_args = input("(comma separated)").replace(" ","").split(",")
+            			DAQ_args = input().replace(" ","").split(",")
             			int_DAQ_args = [int(p) for p in DAQ_args]
             			if (len(int_DAQ_args)!=16):
             				print(int_DAQ_args, "is not a valid input")
@@ -294,7 +296,7 @@ while(EndFlag==0):
             		except:
             			print("Input is not valid")
             	elif (DAQ_default=="y" or DAQ_default=="yes" or DAQ_default=="Y" or DAQ_default=="Yes"):
-            		print("Choose a default settings setup: (1, 2 or 3)")
+            		print("Choose a default setting setup: (1, 2 or 3)")
             		try:
             			DAQ_setup = int(input())
             			if (DAQ_setup == 1):
@@ -324,10 +326,12 @@ while(EndFlag==0):
             			else:
             				print(DAQ_setup, "Error occured during setup settings")
             		except:
-            			print("Error not valid input")
+            			print("Error occured during setup settings")
             		
             	else:
             		print(DAQ_default, " is not a valid input")
+                if (DAQ_ParamsLoaded=1):
+                    print("DAQ settings loaded.")
                 
                 
             elif(VComm=="StartDAQ"):
@@ -338,7 +342,7 @@ while(EndFlag==0):
             			print("Input name for the DAQ output file:")
             			DAQ_outFile = r"./"+str(input())+".dat"
             			print("DAQ output file:", DAQ_outFile) 
-            			daq.seriesCollectData(DAQ_outFile)    
+            			daq.seriesCollectData(DAQ_outFile)
             		except:
             			print("An error occured during DAQ.")
             			CommandFlag=1
@@ -376,6 +380,7 @@ while(EndFlag==0):
     if(VoltageLevel==0):
         EndFlag=1
         print("Ramping voltage down now!")
+        print("==============================================================================")
 
 ###################################Safely Ramp Down (if not 0 V)############################################
 daq.seriesCloseDaq()
