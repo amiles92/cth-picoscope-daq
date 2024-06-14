@@ -51,14 +51,6 @@ uint16_t inputRanges [PS6000_MAX_RANGES] = {	10,
 												20000,
 												50000};
 BOOL        g_ready = FALSE;
-int64_t		g_times [PS6000_MAX_CHANNELS];
-int16_t     g_timeUnit;
-uint32_t    g_sampleCount;
-uint32_t	g_startIndex;
-int16_t     g_autoStopped;
-int16_t     g_trig = 0;
-uint32_t	g_trigAt = 0;
-int16_t		g_overflow;
 
 void set_info(UNIT *unit)
 {

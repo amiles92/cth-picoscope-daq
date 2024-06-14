@@ -1,6 +1,6 @@
 ### Prerequisites
 
-* PyBind11 is used for python interfacing
+* PyBind11 is used for python interfacing \
   Install in Ubuntu:
   ```sh
   apt install pybind11-dev
@@ -10,11 +10,28 @@
   pybind11-config
   ```
 * gcc-11 for PyBind11
-* PicoScope libraries (only made for ps6000 and ps6000a for the moment)
+* Python3
+* PicoScope libraries (only made for ps6000 and ps6000a for the moment)\
+  Ubuntu:
   ```sh
-  sudo apt install libps6000 libps6000a
+  apt install libps6000 libps6000a
   ```
-* Python3 (3.10 might specifically be required but you can probably just change the make line to fix this)
+  RedHat distributions:
+  The picoscope libraries are not easily accessible in redhat and need enabling of SHA1 signature verification. All picoscope sdk packages can be found [here](https://labs.picotech.com/rc/picoscope7/rpm/). We also need to install dependencies manually. Note that this method is not secure and should not be considered a typical way of installing packages.
+  To install the packages, we first enable SHA1 signature verification
+  ```sh
+  update-crypto-policies --set DEFAULT:SHA1
+  ```
+  Install our packages
+  ```sh
+  dnf install https://labs.picotech.com/rc/picoscope7/rpm/x86_64/libpicoipp-1.4.0-4r161.x86_64.rpm \
+              https://labs.picotech.com/rc/picoscope7/rpm/x86_64/libps6000-2.1.139-6r6031.x86_64.rpm \
+              https://labs.picotech.com/rc/picoscope7/rpm/x86_64/libps6000a-1.0.139-0r6031.x86_64.rpm
+  ```
+  And finally disable SHA1 support
+  ```sh
+  update-crypto-policies --set DEFAULT
+  ```
 
 ### Installation
 
@@ -23,4 +40,3 @@
   make
   ```
   Hope that worked
-

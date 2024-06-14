@@ -48,15 +48,8 @@ uint16_t inputRanges [PICO_X1_PROBE_RANGES] = {	10,
 												5000,
 												10000,
 												20000};
-BOOL        g_ready = FALSE;
-int64_t		g_times [PS6000A_MAX_CHANNELS];
-int16_t     g_timeUnit;
-uint32_t    g_sampleCount;
-uint32_t	g_startIndex;
-int16_t     g_autoStopped;
-int16_t     g_trig = 0;
-uint32_t	g_trigAt = 0;
-int16_t		g_overflow;
+BOOL	g_ready = FALSE;
+uint8_t g_multiReady = 0;
 
 void set_info(UNIT * unit)
 {
@@ -409,6 +402,14 @@ void StartRapidBlock(UNIT *unit, uint16_t preTrigger, uint16_t postTriggerMax,
 	status = ps6000aSetNoOfCaptures(unit->handle, 1);
 
 	return;
+}
+
+void StartMultiRapidBlock(vector<UNIT *> vecUnit, vector<uint16_t> vecPreTrigger,
+	vector<uint16_t> vecPostTriggerMax, vector<uint8_t> vecTimebase,
+	vector<uint32_t> vecNumWaveforms)
+{
+	uint8_t len = vecUnit.size();
+	// __builtin_popcount(x)
 }
 
 PICO_STATUS OpenDevice(UNIT *unit, int8_t *serial)

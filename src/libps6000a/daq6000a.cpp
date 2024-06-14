@@ -48,6 +48,7 @@ public:
 
 UNIT g_unit;
 dataCollectionConfig g_dcc(&g_unit, (char*) "");
+vector<dataCollectionConfig> g_vecDcc;
 
 void setActiveChannels(dataCollectionConfig &dcc, 
                        int16_t aChVoltage,
@@ -167,6 +168,31 @@ void collectRapidBlockData(dataCollectionConfig &dcc)
     return;
 }
 
+void collectMultiRapidBlockData(vector<dataCollectionConfig> &vecDcc)
+{
+    int32_t vecLength = vecDcc.size();
+    vector<UNIT *> vecUnit(vecLength);
+    vector<uint16_t> vecSamplesPreTrigger(vecLength);
+    vector<uint16_t> vecMaxPostTrigger(vecLength);
+    vector<uint8_t> vecTimebase(vecLength);
+    vector<uint32_t> vecNumWaveforms(vecLength);
+
+    for (int i = 0; i < vecLength; i++)
+    {
+        uint16_t maxPostTrigger = *max_element( 
+                vecDcc.at(i).chPostSamplesPerWaveform.begin(),
+                vecDcc.at(i).chPostSamplesPerWaveform.end());
+
+        vecUnit.at(i) = vecDcc.at(i).unit;
+        vecSamplesPreTrigger.at(i) = vecDcc.at(i).samplesPreTrigger;
+        vecMaxPostTrigger.at(i) = maxPostTrigger;
+        vecTimebase.at(i) = vecDcc.at(i).timebase.to_ulong();
+        vecNumWaveforms.at(i) = vecDcc.at(i).numWaveforms;
+    }
+    StartMultiRapidBlock(vecUnit, vecSamplesPreTrigger, vecMaxPostTrigger,
+            vecTimebase, vecNumWaveforms);
+}
+
 void setDataOutput(dataCollectionConfig &dcc, char *outputFileName)
 {
     dcc.ostream.open(outputFileName, ios::out | ios::binary);
@@ -221,6 +247,13 @@ void bitset_reverse(std::bitset<N> &b)
     }
 }
 
+char *concatTwoChar(char *line1, char *line2)
+{
+    char *totalLine;
+    int len = asprintf(&totalLine, "%s_%s", line1, line2);
+    if (len < 0) abort();
+    return totalLine;
+}
 
 void writeDataHeader(dataCollectionConfig &dcc)
 {
@@ -364,6 +397,7 @@ int seriesSetDaqSettings(
         setDataConfig(g_dcc, &timebase, &numWaveforms, &samplesPreTrigger, 
                 &chAWfSamples, &chBWfSamples, &chCWfSamples, &chDWfSamples);
         g_dcc.dataConfigured = TRUE;
+        printf("Data settings updated\n");
     }
     catch (exception e)
     {
@@ -418,6 +452,80 @@ int seriesCloseDaq()
         freeDataBuffers(g_dcc);
         g_dcc.dataConfigured = FALSE;
     }
+    return 1;
+}
+
+int multiSeriesInitDaq(char *serial)
+{
+    for (int i = 0; i < g_vecDcc.size(); i++)
+    {
+        if (0 == strcmp(serial, (char *) g_vecDcc.at(i).unit->serial))
+        {
+            printf("This unit is already intialised!!\n");
+            return 0;
+        }
+    }
+
+    UNIT unit;
+    findUnit(&unit, (int8_t*) serial);
+
+    dataCollectionConfig dcc(&unit, serial);
+    dcc.unitInitialised = TRUE;
+
+    g_vecDcc.push_back(dcc);
+
+    return 1;
+}
+
+int multiSeriesSetDaqSettings(
+            int16_t chATrigger, int16_t chAVRange, uint16_t chAWfSamples,
+            int16_t chBTrigger, int16_t chBVRange, uint16_t chBWfSamples,
+            int16_t chCTrigger, int16_t chCVRange, uint16_t chCWfSamples,
+            int16_t chDTrigger, int16_t chDVRange, uint16_t chDWfSamples,
+            int16_t auxTrigger, uint8_t timebase,
+            uint32_t numWaveforms, uint16_t samplesPreTrigger)
+{
+    for (int i = 0; i < g_vecDcc.size(); i++)
+    {
+        if (g_vecDcc.at(i).unitInitialised == FALSE)
+        {
+            printf("Unit uninitialised in multiDcc");
+            return 0;
+        }
+        setActiveChannels(g_vecDcc.at(i), chAVRange, chBVRange, chCVRange, chDVRange);
+        setTriggerConfig(g_vecDcc.at(i), chATrigger, chBTrigger, chCTrigger, chDTrigger, auxTrigger);
+        setDataConfig(g_vecDcc.at(i), &timebase, &numWaveforms, &samplesPreTrigger, 
+                &chAWfSamples, &chBWfSamples, &chCWfSamples, &chDWfSamples);
+        g_vecDcc.at(i).dataConfigured = TRUE;
+    }
+}
+
+int multiSeriesCollectData(char *outputFileBasename)
+{
+    // Idk how to decide outputfile names, add a random number? Add serial number?
+    // Issue is that the serial number has a / so it won't work as is
+    // Will need to replace with a - or something
+    // Need to add functions to daq6ka and ps6kawrapper to accommodate this
+
+    for (int i = 0; i < g_vecDcc.size(); i++)
+    {
+        if ((g_dcc.unitInitialised == FALSE) || (g_dcc.dataConfigured = FALSE))
+        {
+            return 0;
+        }
+    }
+    collectMultiRapidBlockData(g_vecDcc);
+    for (int i = 0; i < g_vecDcc.size(); i++)
+    {
+        char *outputFile = concatTwoChar(outputFileBasename, g_vecDcc.at(i).serial);
+        setDataOutput(g_dcc, outputFile);
+        writeDataHeader(g_dcc);
+        writeDataOut(g_dcc);
+        closeDataOutput(g_dcc);
+        printf("Written to file: %s\n", outputFile);
+        resetDataBuffers(g_dcc);
+    }
+    printf("Daq finished\n\n");
     return 1;
 }
 

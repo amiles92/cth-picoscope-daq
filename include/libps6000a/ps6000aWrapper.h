@@ -80,6 +80,10 @@ void SetSimpleTriggerSettings(UNIT *unit, int16_t threshold,
 void StartRapidBlock(UNIT *unit, uint16_t preTrigger, uint16_t postTriggerMax,
 	uint8_t timebase, uint32_t numWaveforms);
 
+void StartMultiRapidBlock(std::vector<UNIT *> vecUnit, std::vector<uint16_t> vecPreTrigger,
+	std::vector<uint16_t> vecPostTriggerMax, std::vector<uint8_t> vecTimebase,
+	std::vector<uint32_t> vecNumWaveforms);
+
 void disableTrigger(UNIT *unit);
 
 void SetMultiTriggerSettings(UNIT *unit, std::bitset<5> triggers, std::vector<int8_t> thresholds,
