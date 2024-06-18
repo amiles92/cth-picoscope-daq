@@ -415,6 +415,15 @@ void StartMultiRapidBlock(vector<UNIT *> vecUnit, vector<uint16_t> vecPreTrigger
 
 	g_multiReady = 0;
 
+	vector<void *> vecIntegers;
+
+	for (int i = 0; i < len; i++)
+	{
+		uint8_t tmp_i = i;
+		vecIntegers.push_back(&tmp_i);
+		
+	}
+
 	printf("\n\nStarting DAQ\n\n");
 
 	chrono::steady_clock::time_point begin = std::chrono::steady_clock::now();
@@ -422,8 +431,33 @@ void StartMultiRapidBlock(vector<UNIT *> vecUnit, vector<uint16_t> vecPreTrigger
 	for (int i = 0; i < len; i++)
 	{
 		ps6000aRunBlock(unit->handle, preTrigger64, postTriggerMax64, timebase32,
-			&timeIndisposed, 0, CallBackBlock, NULL);
+			&timeIndisposed, 0, MultiCallBackBlock, NULL);
 	}
+	
+	while (!g_ready && !_kbhit()) // XXX: Should change to only cancel if getch == ctrl+c
+	{
+		usleep(0);
+	}
+
+	if (!g_ready)
+	{
+		_getch();
+		status = ps6000Stop(unit->handle);
+		status = ps6000GetNoOfCaptures(unit->handle, &nCompletedCaptures);
+
+		printf("Rapid capture aborted. %d complete blocks were captured\n", nCompletedCaptures);
+		printf("Early abort writeout not yet supported\n");
+
+		throw "aborted, need to implement early cancellation writeout";
+
+	}
+
+	chrono::steady_clock::time_point end = std::chrono::steady_clock::now();
+
+	int time = chrono::duration_cast<std::chrono::milliseconds>(end - begin).count();
+
+	printf("Time taken: %d ms\n", time);
+	printf("Trigger rate: %f Hz\n", (double) numWaveforms / time * 1.0e3);
 }
 
 PICO_STATUS OpenDevice(UNIT *unit, int8_t *serial)
@@ -570,7 +604,7 @@ void PREF4 CallBackBlock(int16_t handle, PICO_STATUS status, void * pParameter)
 
 void PREF4 MultiCallBackBlock(int16_t handle, PICO_STATUS status, void *pParameter)
 {
-	int8_t *runId = (int8_t *) pParameter;
+	uint8_t *runId = (uint8_t *) pParameter;
 	if (status != PICO_CANCELLED)
 	{
 		g_multiReady |= 1 << *runId;

@@ -540,6 +540,24 @@ int multiSeriesCollectData(char *outputFileBasename)
     return 1;
 }
 
+int multiSeriesCloseDaq()
+{
+    for (int i = 0; i < g_vecDcc.size(); i++)
+    {
+        if (g_vecDcc.at(i).unitInitialised)
+        {
+            CloseDevice(g_dcc.unit);
+            g_vecDcc.at(i).unitInitialised = FALSE;
+        }
+        if (g_vecDcc.at(i).dataConfigured)
+        {
+            freeDataBuffers(g_dcc);
+            g_vecDcc.at(i).dataConfigured = FALSE;
+        }
+    }
+    return 1;
+}
+
 // to be run from python side
 int runFullDAQ(char *outputFile,
             int16_t chATrigger, int16_t chAVRange, uint16_t chAWfSamples,
@@ -566,6 +584,7 @@ int runFullDAQ(char *outputFile,
         writeDataOut(dcc);
         closeDataOutput(dcc);
         printf("Data written to %s\n", outputFile);
+        freeDataBuffers(dcc);
         CloseDevice(unit);
         printf("Device closed\n");
     }
