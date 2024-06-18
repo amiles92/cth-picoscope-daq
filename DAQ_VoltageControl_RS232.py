@@ -276,78 +276,145 @@ while(EndFlag==0):
                 print("")
                      
             elif(VComm=="SetDAQ"):
-            	print("Setup DAQ with one of the default setups? (y/n): ")
-            	DAQ_default = str(input())
-            	if (DAQ_default=="n" or DAQ_default=="no" or DAQ_default=="N" or DAQ_default=="No"):
-            		print("Input DAQ settings as:")
-            		print("chATrigger,chAVRange,chAWfSamples,")
-            		print("chBTrigger,chBVRange,chBWfSamples,")
-            		print("chCTrigger,chCVRange,chCWfSamples,")
-            		print("chDTrigger,chDVRange,chDWfSamples,")
-            		print("auxTrigger,timebase,numWaveforms,samplesPreTrigger")
-            		try:
-            			DAQ_args = input().replace(" ","").split(",")
-            			int_DAQ_args = [int(p) for p in DAQ_args]
-            			if (len(int_DAQ_args)!=16):
-            				print(int_DAQ_args, "is not a valid input")
-            			else:
-            				daq.seriesSetDaqSettings(*int_DAQ_args)
-            				DAQ_ParamsLoaded=1
-            		except:
-            			print("Input is not valid")
-            	elif (DAQ_default=="y" or DAQ_default=="yes" or DAQ_default=="Y" or DAQ_default=="Yes"):
-            		print("Choose a default setting setup: (1, 2 or 3)")
-            		try:
-            			DAQ_setup = int(input())
-            			if (DAQ_setup == 1):
-            				daq.seriesSetDaqSettings(
-            					0, 2, 1100,
-            					0, 2, 1000,
-            					0, 2, 1000,
-            					0, 2, 1000,
-            					100, 2, 20000, 100)
-            				DAQ_ParamsLoaded=1
-            			elif (DAQ_setup == 2):
-            				daq.seriesSetDaqSettings(
-            					0, 2, 900,
-            					0, 2, 900,
-            					0, 2, 900,
-            					0, 2, 900,
-            					100, 2, 50000, 0)
-            				DAQ_ParamsLoaded=1
-            			elif (DAQ_setup == 3):
-            				daq.seriesSetDaqSettings(
-            					0, 2, 1200,
-            					0, 2, 1200,
-            					0, 2, 1200,
-            					0, 2, 1200,
-            					100, 2, 10000, 50)
-            				DAQ_ParamsLoaded=1
-            			else:
-            				print(DAQ_setup, "Error occured during setup settings")
-            		except:
-            			print("Error occured during setup settings")
-            		
-            	else:
-            		print(DAQ_default, " is not a valid input")
-            	if (DAQ_ParamsLoaded==1):
-            		print("DAQ settings loaded.")
+                print("Setup DAQ with one of the default setups? (y/n): ")
+                DAQ_default = str(input())
+                if (DAQ_default=="n" or DAQ_default=="no" or DAQ_default=="N" or DAQ_default=="No"):
+                    print("Input DAQ settings as:")
+                    print("chATrigger,chAVRange,chAWfSamples,")
+                    print("chBTrigger,chBVRange,chBWfSamples,")
+                    print("chCTrigger,chCVRange,chCWfSamples,")
+                    print("chDTrigger,chDVRange,chDWfSamples,")
+                    print("auxTrigger,timebase,numWaveforms,samplesPreTrigger")
+                    try:
+                        DAQ_args = input().replace(" ","").split(",")
+                        int_DAQ_args = [int(p) for p in DAQ_args]
+                        if (len(int_DAQ_args)!=16):
+                            print(int_DAQ_args, "is not a valid input")
+                        else:
+                            daq.seriesSetDaqSettings(*int_DAQ_args)
+                            DAQ_ParamsLoaded=1
+                    except:
+                        print("Input is not valid")
+                elif (DAQ_default=="y" or DAQ_default=="yes" or DAQ_default=="Y" or DAQ_default=="Yes"):
+                    print("----------------------------------------------------")
+                    print("Setup 1: Generic pulse catching, 4 channels")
+                    print("ChA: 0, 2, 1000")
+                    print("ChB: 0, 2, 1000,")
+                    print("ChC: 0, 2, 1000,")
+                    print("ChD: 0, 2, 1000,")
+                    print("AuxTrigger: 100")
+                    print("Timebase: 2 (0.8ns)")
+                    print("NumWaveforms: 10000")
+                    print("SamplesPreTrigger: 0")
+                    print("----------------------------------------------------")
+                    print("Setup 2: Faster pulse catching, 2 channels")
+                    print("ChA: 0, 2, 1000")
+                    print("ChB: 0, 99, 0,")
+                    print("ChC: 0, 2, 1000,")
+                    print("ChD: 0, 99, 0,")
+                    print("AuxTrigger: 100")
+                    print("Timebase: 1 (0.4ns)")
+                    print("NumWaveforms: 10000")
+                    print("SamplesPreTrigger: 0")
+                    print("----------------------------------------------------")
+                    print("Setup 3: Fastest pulse catching, 1 channel")
+                    print("ChA: 0, 2, 1000")
+                    print("ChB: 0, 99, 0,")
+                    print("ChC: 0, 99, 0,")
+                    print("ChD: 0, 99, 0,")
+                    print("AuxTrigger: 100")
+                    print("Timebase: 0 (0.2ns)")
+                    print("NumWaveforms: 10000")
+                    print("SamplesPreTrigger: 0")
+                    print("----------------------------------------------------")
+                    print("Setup 4: 3 MPPC + 1 PMT, LED")
+                    print("ChA: 0, 2, 1000")
+                    print("ChB: 0, 2, 1000,")
+                    print("ChC: 0, 2, 1000,")
+                    print("ChD: 0, 2, 5000,")
+                    print("AuxTrigger: 100")
+                    print("Timebase: 2 (0.8ns)")
+                    print("NumWaveforms: 10000")
+                    print("SamplesPreTrigger: 0")
+                    print("----------------------------------------------------")
+                    print("Setup 5: 3 MPPC + 1 PMT, Dark photons")
+                    print("ChA: 0, 2, 3000")
+                    print("ChB: 0, 2, 3000,")
+                    print("ChC: 0, 2, 3000,")
+                    print("ChD: 0, 2, 3000,")
+                    print("AuxTrigger: 100")
+                    print("Timebase: 2 (0.8ns)")
+                    print("NumWaveforms: 10000")
+                    print("SamplesPreTrigger: 0")
+                    print("----------------------------------------------------")
+                    print("Choose a default setup: (1, 2, 3, 4 or 5)")
+                    try:
+                        DAQ_setup = int(input())
+                        if (DAQ_setup == 1):
+                            daq.seriesSetDaqSettings(
+                                0, 2, 1000,
+                                0, 2, 1000,
+                                0, 2, 1000,
+                                0, 2, 1000,
+                                100, 2, 10000, 0)
+                            DAQ_ParamsLoaded=1
+                        elif (DAQ_setup == 2):
+                            daq.seriesSetDaqSettings(
+                                0, 2, 1000,
+                                0, 99, 0,
+                                0, 2, 1000,
+                                0, 99, 0,
+                                100, 1, 10000, 0)
+                            DAQ_ParamsLoaded=1
+                        elif (DAQ_setup == 3):
+                            daq.seriesSetDaqSettings(
+                                0, 2, 1200,
+                                0, 99, 0,
+                                0, 99, 0,
+                                0, 99, 0,
+                                100, 0, 10000, 0)
+                            DAQ_ParamsLoaded=1
+                        elif (DAQ_setup == 4):
+                            daq.seriesSetDaqSettings(
+                                0, 2, 1000,
+                                0, 2, 1000,
+                                0, 2, 1000,
+                                0, 2, 5000,
+                                100, 2, 10000, 0)
+                            DAQ_ParamsLoaded=1
+                        elif (DAQ_setup == 5):
+                            daq.seriesSetDaqSettings(
+                                0, 2, 3000,
+                                0, 2, 3000,
+                                0, 2, 3000,
+                                0, 2, 3000,
+                                100, 2, 10000, 0)
+                            DAQ_ParamsLoaded=1
+                        else:
+                            print(DAQ_setup, "Error occured during setup setting")
+                    except:
+                        print("Error occured during setup setting")
+                    
+                else:
+                    print(DAQ_default, " is not a valid input")
+                if (DAQ_ParamsLoaded==1):
+                    print("DAQ settings loaded.")
                 
                 
             elif(VComm=="StartDAQ"):
-            	if (DAQ_ParamsLoaded != 1):
-            		print("Set some DAQ parameters first!")
-            	else:       	
-            		try:
-            			print("Input name for the DAQ output file:")
-            			DAQ_outFile = r"./data/"+str(input())+".dat"
-            			print("DAQ output file:", DAQ_outFile) 
-            			daq.seriesCollectData(DAQ_outFile)
-            		except:
-            			print("An error occured during DAQ.")
-            			CommandFlag=1
-            			EndFlag=1
-            			print("Ramping voltage down now!") 
+                if (DAQ_ParamsLoaded != 1):
+                    print("Set some DAQ parameters first!")
+                else:           
+                    try:
+                        print("Input name for the DAQ output file:")
+                        DAQ_outFile = r"./data/"+str(input())+".dat"
+                        print("DAQ output file:", DAQ_outFile) 
+                        daq.seriesCollectData(DAQ_outFile)
+                    except:
+                        print("An error occured during DAQ.")
+                        CommandFlag=1
+                        EndFlag=1
+                        print("Ramping voltage down now!") 
                         
             elif(VComm=="NI"):
                 print("Enter new below threshold increment voltage (0.1f): ")
