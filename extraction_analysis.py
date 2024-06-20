@@ -11,28 +11,45 @@ from matplotlib.backends.backend_pdf import PdfPages
 ps6000VRanges = [10, 20, 50, 100, 200, 500, 1000, 2000, 5000, 
                  10000, 20000, 50000]
                  
-### Analysis          
+### Analysis  
+windowlow, windowhigh = 170, 250        
 showing = 1
 saving = 0
 inputDirectory = "../data-files/"
-# test files
+## tested files
+## Monash setup / alternate LED on
 #inputFileList = ["BothLED_81V_3.25V.dat", "RightLED_81V_3.25V.dat", "LeftLED_81V_3.25V.dat"]
-# new setup no LED on
+## new setup / no LED on
 #inputFileList = ["19Jun24_80V_Dark_TapedBox.dat"]
 #inputFileList = ["19Jun24_80.5V_Dark_TapedBox.dat"]
 #inputFileList = ["19Jun24_81V_Dark_TapedBox.dat"]
 #inputFileList = ["19Jun24_81.5V_Dark_TapedBox.dat"]
 #inputFileList = ["19Jun24_82V_Dark_TapedBox.dat"]
-# new setup no LED on (run 2)
-#inputFileList = ["19Jun24_81V_Dark_TapedBox_Round2.dat"]
-# new setup no LED on (rotated MPPC)
-inputFileList = ["19Jun24_81V_Dark_TapedBox_RotatedMPPC.dat"]
-# new setup LED voltage at 1.41V
-#inputFileList = ["19Jun24_80V_1.41V_TapedBox.dat"]
-#inputFileList = ["19Jun24_80.5V_1.41V_TapedBox.dat"]
+## new setup / LED at 1.41V
+#inputFileList = ["19Jun24_80V_1.41V_TapedBox.dat", "19Jun24_81V_1.41V_TapedBox.dat", "19Jun24_81.5V_1.41V_TapedBox.dat", "19Jun24_82V_1.41V_TapedBox.dat"]
 #inputFileList = ["19Jun24_81V_1.41V_TapedBox.dat"]
-#inputFileList = ["19Jun24_81.5V_1.41V_TapedBox.dat"]
-#inputFileList = ["19Jun24_82V_1.41V_TapedBox.dat"]
+## new setup / no LED on / run 2
+#inputFileList = ["19Jun24_81V_Dark_TapedBox_Round2.dat"]
+## new setup / no LED on / rotated MPPC
+#inputFileList = ["19Jun24_81V_Dark_TapedBox_RotatedMPPC.dat"]
+## new setup / no LED on / other MPPC
+#inputFileList = ["20Jun24_80V_Dark_TapedBox_MPPC3.dat"]
+#inputFileList = ["20Jun24_80.5V_Dark_TapedBox_MPPC3.dat"]
+#inputFileList = ["20Jun24_81V_Dark_TapedBox_MPPC3.dat"]
+## new setup / no LED on / other MPPC / black sheet / with light
+#inputFileList = ["20Jun24_80V_Dark_Sheet_MPPC3.dat"]
+#inputFileList = ["20Jun24_81V_Dark_Sheet_MPPC3.dat"]
+## new setup / no LED on / other MPPC / black sheet / without light
+#inputFileList = ["20Jun24_80V_Dark_Sheet_MPPC3_LightsOff.dat"]
+#inputFileList = ["20Jun24_81V_Dark_Sheet_MPPC3_LightsOff.dat"]
+## new setup / LED at 1.41V / other MPPC / black sheet
+#inputFileList = ["20Jun24_81V_1.41V_Sheet_MPPC3_LightsOn.dat"]
+## new setup / LED at 1.41V / other MPPC / black sheet / diffuser added
+#inputFileList = ["20Jun24_81V_1.41V_Diffuser_Sheet_MPPC3_LightsOn.dat"]
+## new setup / LED at 1.44V / other MPPC / black sheet / diffuser added
+#inputFileList = ["20Jun24_81V_1.44V_Diffuser_Sheet_MPPC3_LightsOn.dat"]
+## new setup / LED at 1.41V / other MPPC / black sheet / reverse MPPC
+inputFileList = ["20Jun24_80V_1.41V_Diffuser_Sheet_MPPC3_LightsOn_Rotated.dat", "20Jun24_80.5V_1.41V_Diffuser_Sheet_MPPC3_LightsOn_Rotated.dat", "20Jun24_81V_1.41V_Diffuser_Sheet_MPPC3_LightsOn_Rotated.dat", "20Jun24_80V_1.42V_Diffuser_Sheet_MPPC3_LightsOn_Rotated.dat", "20Jun24_80.5V_1.42V_Diffuser_Sheet_MPPC3_LightsOn_Rotated.dat", "20Jun24_81V_1.42V_Diffuser_Sheet_MPPC3_LightsOn_Rotated.dat", "20Jun24_80V_1.44V_Diffuser_Sheet_MPPC3_LightsOn_Rotated.dat", "20Jun24_80.5V_1.44V_Diffuser_Sheet_MPPC3_LightsOn_Rotated.dat", "20Jun24_81V_1.44V_Diffuser_Sheet_MPPC3_LightsOn_Rotated.dat"]
 outputDirectory = "plots/"
 
 ###############################################################################
@@ -172,7 +189,7 @@ def plotting_hist (d, numBins, plotTitle, xLabel, yLabel, showing):
     	plt.show()
     return fig
     
-def moving_average(d, n):
+def moving_average0(d, n):
     newD = []
     for i in range(len(d)):
         D = d[i]
@@ -201,7 +218,13 @@ def moving_average(d, n):
                 j += 1
             newD.append(D / (n + 1 + count))           
     return newD
-    
+
+def moving_average1(d, n):
+    return [np.mean(d[i-n:i+n]) for i in range(n, len(d)-n-1)]
+  
+def moving_average(d, n, i1, i2):
+    return [np.mean(d[i-n:i+n]) for i in range(i1+n, i2-n-1)]  
+  
 def saving_plots(plots, outputFile):
     pdfFile = PdfPages(outputFile)
     for plot in plots:
@@ -232,13 +255,18 @@ for inputFile in inputFileList:
         minimumNewChData = []
         indexMinMaChData = []
         indexMinNewChData = []
+        eventcounter = 0
         for wfData in chData:
-            maWfData = moving_average(wfData, 10)
-            maWfData = histogramming(maWfData, 500)
+            maWfData = moving_average(wfData, 10, windowlow, windowhigh)
+            #maWfData = histogramming(maWfData, 500)
             maChData.append(maWfData)
-            newWfData = histogramming(wfData, 500)
-            newChData.append(newWfData)
-        print("#########Moving average and histogramming done...")
+            #newWfData = histogramming(wfData, 500)
+            #newChData.append(newWfData)
+            eventcounter += 1
+            if eventcounter%5000==0:
+            	print("event {}".format(eventcounter))
+        newChData = chData
+        print("######### Moving average and histogramming done...")
         minimumAllNewWf = np.min(newChData) 
         for newWfData in newChData:
             minimumNewWf = np.min(newWfData)
@@ -267,7 +295,7 @@ for inputFile in inputFileList:
                 plots.append(plotting_plot(maWfData, 'Largest charge waveform for ch' + chr(ord('A') + ch), 'binned time', 'charge [mV]', showing))
                 countMaWfPlots += 1
         plots.append(plotting_hist(indexMinMaChData, 500, 'Charge peak index for ch' + chr(ord('A') + ch), 'minimum charge bin index', 'frequency', showing))
-        nBins = round((np.max(minimumMaChData) - np.min(minimumMaChData)) / 0.4)
+        nBins = round((np.max(minimumMaChData) - np.min(minimumMaChData)) / 0.1)
         if nBins < 1:
             nBins = 1
         plots.append(plotting_hist(minimumMaChData, nBins, 
