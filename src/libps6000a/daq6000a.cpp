@@ -442,13 +442,14 @@ int runFullDAQ(char *outputFile,
                     &chAWfSamples, &chBWfSamples, &chCWfSamples, &chDWfSamples);
 
         collectRapidBlockData(dcc);
+        CloseDevice(unit);
+        printf("Device closed\n");
         setDataOutput(dcc, outputFile);
         writeDataHeader(dcc);
         writeDataOut(dcc);
         closeDataOutput(dcc);
         printf("Data written to %s\n", outputFile);
-        CloseDevice(unit);
-        printf("Device closed\n");
+        freeDataBuffers(dcc);
     }
     catch (exception e)
     {
