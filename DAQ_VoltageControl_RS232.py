@@ -4,7 +4,7 @@
 Created on Mon 29/06/2020
 Author: Sam Dekkers
 Last Update by Sam Dekkers: Mon 04/07/22
-DAQ options implemented on 14/06/2024 by Thomas Clouvel
+DAQ options implemented by Thomas Clouvel from already existing DAQ package
 
 Script for ramping up voltage on Keithley 6487 Picoammeter via an RS232 connection
 
@@ -188,9 +188,14 @@ CompFlag=0 #Error flag
 #VoltageRead = what the voltage read from the instrument is
 
 DAQ_ParamsLoaded = 0
+DAQ_End = 0
 picoscopes = ['IW098/0028']
-daq.seriesInitDaq(picoscopes[0])
-
+print("Picoscope:", picoscopes)
+status = 0
+status = daq.seriesInitDaq(picoscopes[0])
+if status == 0:
+    print("Python - DAQ device not opened correctly")
+print(status)
 while(EndFlag==0):
 
     CurrentVoltage = VoltageRead #Keep track of voltage as increase it
@@ -267,6 +272,7 @@ while(EndFlag==0):
                 print("")
                 print("SetDAQ => set the data acquisition system parameters")
                 print("StartDAQ => start the data acquisition system")
+                print("StopDAQ => stop the data acquisition system")
                 print("NI => set new voltage increment for below the threshold voltage")
                 print("TI => set new voltage increment for above the threshold voltage")
                 print("TV => set new threshold voltage")
@@ -415,7 +421,14 @@ while(EndFlag==0):
                         CommandFlag=1
                         EndFlag=1
                         print("Ramping voltage down now!") 
-                        
+
+            elif(VComm=="StopDAQ"):
+                if (DAQ_End != 0):
+                    print("DAQ already stopped.")
+                else:
+                    DAQ_End=1
+                    daq.seriesCloseDaq()
+                
             elif(VComm=="NI"):
                 print("Enter new below threshold increment voltage (0.1f): ")
                 NormIncrement = float(input())
@@ -450,7 +463,7 @@ while(EndFlag==0):
         print("==============================================================================")
 
 ###################################Safely Ramp Down (if not 0 V)############################################
-daq.seriesCloseDaq()
+if(DAQ_End==0): daq.seriesCloseDaq()
 VoltageRead = ReadVoltage(instrument)
 if(CompFlag==1): VoltageRead=CurrentVoltage #if an error code is being read, cant use the readout to ramp down so use what it should have been to start ramping down   
 if(VoltageRead>0.0):ZeroVoltage(VoltageRead,instrument)
