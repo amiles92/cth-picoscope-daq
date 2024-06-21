@@ -304,6 +304,8 @@ for inputFile in inputFileList:
         ch += 1
         if saving == 0:
             print("###### Saving...")
+            chOutputFileNp = outputFile + "_ch" + chr(ord('A') + ch)
+            np.save("{}_minimumMaChData.npy".format(chOutputFileNp), np.array(minimumMaChData))
             saving_plots(plots, chOutputFile)
     print("")
 print("Extraction and analysis finished !\n")
