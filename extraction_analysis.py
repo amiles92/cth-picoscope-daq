@@ -15,6 +15,7 @@ ps6000VRanges = [10, 20, 50, 100, 200, 500, 1000, 2000, 5000,
 windowlow, windowhigh = 170, 250        
 showing = 1
 saving = 0
+nplots = 200
 inputDirectory = "../data-files/"
 ## tested files
 ## Monash setup / alternate LED on
@@ -166,9 +167,9 @@ def histogramming (d, numBins):
     
     return data
     
-def plotting_plot (d, plotTitle, xLabel, yLabel, showing):
+def plotting_plot (d, plotTitle, xLabel, yLabel, showing, ls='-'):
     fig = plt.figure()
-    plt.plot(d)
+    plt.plot(d, ls)
     plt.xlabel(xLabel)
     plt.ylabel(yLabel)
     plt.title(plotTitle)
@@ -176,7 +177,22 @@ def plotting_plot (d, plotTitle, xLabel, yLabel, showing):
     	plt.show()
     plt.close()
     return fig
-   
+
+def plotting_plots (D, plotTitle, xLabel, yLabel, showing, nplots, ls='.'):
+    fig = plt.figure()
+    plotcounter = 0
+    for d in D:
+        if plotcounter > nplots:
+            break
+        plt.plot(D[i], ls)
+        plotcounter += 1
+    plt.xlabel(xLabel)
+    plt.ylabel(yLabel)
+    plt.title(plotTitle)
+    if showing ==  0:
+        plt.show()
+    plt.close()
+    return fig
     
 def plotting_hist (d, numBins, plotTitle, xLabel, yLabel, showing):
     fig = plt.figure()
@@ -268,6 +284,7 @@ for inputFile in inputFileList:
         newChData = chData
         print("######### Moving average and histogramming done...")
         minimumAllNewWf = np.min(newChData) 
+        plots.append(plotting_plots(newChData, 'First {} wave forms for ch {}'.format(nplots, ch), 'binned time', 'charge [mV]', showing, nplots))
         for newWfData in newChData:
             minimumNewWf = np.min(newWfData)
             minimumNewChData.append(minimumNewWf)
