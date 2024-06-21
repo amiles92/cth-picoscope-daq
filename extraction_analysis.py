@@ -284,7 +284,7 @@ for inputFile in inputFileList:
         newChData = chData
         print("######### Moving average and histogramming done...")
         minimumAllNewWf = np.min(newChData) 
-        plots.append(plotting_plots(newChData, 'First {} wave forms for ch {}'.format(nplots, ch), 'binned time', 'charge [mV]', showing, nplots))
+        plots.append(plotting_plots(newChData, 'First {} waveforms for ch {}'.format(nplots, ch), 'binned time', 'charge [mV]', showing, nplots))
         for newWfData in newChData:
             minimumNewWf = np.min(newWfData)
             minimumNewChData.append(minimumNewWf)
