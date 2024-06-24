@@ -4,7 +4,6 @@
 Created on Mon 29/06/2020
 Author: Sam Dekkers
 Last Update by Sam Dekkers: Mon 04/07/22
-DAQ options implemented by Thomas Clouvel from already existing DAQ package
 
 Script for ramping up voltage on Keithley 6487 Picoammeter via an RS232 connection
 
