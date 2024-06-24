@@ -2,6 +2,7 @@ import numpy as np
 from scipy.stats import norm
 import matplotlib.pyplot as plt
 from matplotlib.backends.backend_pdf import PdfPages
+import sys
 
 ###############################################################################
 ###                               Parameters                                ###
@@ -48,16 +49,14 @@ inputDirectory = "../data-files/"
 ## new setup / LED at 1.41V / other MPPC / black sheet / diffuser added
 #inputFileList = ["20Jun24_81V_1.41V_Diffuser_Sheet_MPPC3_LightsOn.dat"]
 ## new setup / LED at 1.44V / other MPPC / black sheet / diffuser added
-#inputFileList = ["20Jun24_81V_1.44V_Diffuser_Sheet_MPPC3_LightsOn.dat"]
+inputFileList = ["20Jun24_81V_1.44V_Diffuser_Sheet_MPPC3_LightsOn.dat"]
 ## new setup / LED at 1.41V / other MPPC / black sheet / reverse MPPC
-inputFileList = ["20Jun24_80V_1.41V_Diffuser_Sheet_MPPC3_LightsOn_Rotated.dat", "20Jun24_80.5V_1.41V_Diffuser_Sheet_MPPC3_LightsOn_Rotated.dat", "20Jun24_81V_1.41V_Diffuser_Sheet_MPPC3_LightsOn_Rotated.dat", "20Jun24_80V_1.42V_Diffuser_Sheet_MPPC3_LightsOn_Rotated.dat", "20Jun24_80.5V_1.42V_Diffuser_Sheet_MPPC3_LightsOn_Rotated.dat", "20Jun24_81V_1.42V_Diffuser_Sheet_MPPC3_LightsOn_Rotated.dat", "20Jun24_80V_1.44V_Diffuser_Sheet_MPPC3_LightsOn_Rotated.dat", "20Jun24_80.5V_1.44V_Diffuser_Sheet_MPPC3_LightsOn_Rotated.dat", "20Jun24_81V_1.44V_Diffuser_Sheet_MPPC3_LightsOn_Rotated.dat"]
+#inputFileList = ["20Jun24_80V_1.41V_Diffuser_Sheet_MPPC3_LightsOn_Rotated.dat", "20Jun24_80.5V_1.41V_Diffuser_Sheet_MPPC3_LightsOn_Rotated.dat", "20Jun24_81V_1.41V_Diffuser_Sheet_MPPC3_LightsOn_Rotated.dat", "20Jun24_80V_1.42V_Diffuser_Sheet_MPPC3_LightsOn_Rotated.dat", "20Jun24_80.5V_1.42V_Diffuser_Sheet_MPPC3_LightsOn_Rotated.dat", "20Jun24_81V_1.42V_Diffuser_Sheet_MPPC3_LightsOn_Rotated.dat", "20Jun24_80V_1.44V_Diffuser_Sheet_MPPC3_LightsOn_Rotated.dat", "20Jun24_80.5V_1.44V_Diffuser_Sheet_MPPC3_LightsOn_Rotated.dat", "20Jun24_81V_1.44V_Diffuser_Sheet_MPPC3_LightsOn_Rotated.dat"]
 outputDirectory = "plots/"
 
 ###############################################################################
 ###                       Data extraction functions                         ###
 ###############################################################################
-
-
 
 def byteBin(byte):
     return '{0:08b}'.format(ord(byte))
@@ -143,7 +142,7 @@ def readData(f, d):
     return data
     
 ###############################################################################
-###                   Analysis and plot saving functions                    ###
+###                 Pre-analysis and plot saving functions                  ###
 ###############################################################################  
  
 def histogramming (d, numBins):
@@ -184,7 +183,7 @@ def plotting_plots (D, plotTitle, xLabel, yLabel, showing, nplots, ls='.'):
     for d in D:
         if plotcounter > nplots:
             break
-        plt.plot(D[i], ls)
+        plt.plot(d, ls)
         plotcounter += 1
     plt.xlabel(xLabel)
     plt.ylabel(yLabel)
@@ -251,78 +250,84 @@ def saving_plots(plots, outputFile):
 ###                                 Main                                    ###
 ###############################################################################
 
-print("\nStarting extraction and analysis...\n")
-for inputFile in inputFileList: 
-    outputFile = outputDirectory + inputFile.removesuffix('.dat')
-    print("### Extracting data from '" + inputFile + "'...")
-    f = open(inputDirectory + inputFile, 'rb')
-    header = readHeader(f)
-    data = readData(f, header)
-    ch = 0
-    for chData in data:
-        print("###### Analyzing channel " + chr(ord('A') + ch) + "...")
-        chOutputFile = outputFile + "_ch" + chr(ord('A') + ch) + ".pdf"
-        countMaWfPlots = 0
-        countNewWfPlots = 0
-        plots = []
-        maChData = []
-        newChData = []
-        minimumMaChData = []
-        minimumNewChData = []
-        indexMinMaChData = []
-        indexMinNewChData = []
-        eventcounter = 0
-        for wfData in chData:
-            maWfData = moving_average(wfData, 10, windowlow, windowhigh)
-            #maWfData = histogramming(maWfData, 500)
-            maChData.append(maWfData)
-            #newWfData = histogramming(wfData, 500)
-            #newChData.append(newWfData)
-            eventcounter += 1
-            if eventcounter%5000==0:
-            	print("event {}".format(eventcounter))
-        newChData = chData
-        print("######### Moving average and histogramming done...")
-        minimumAllNewWf = np.min(newChData) 
-        plots.append(plotting_plots(newChData, 'First {} waveforms for ch {}'.format(nplots, ch), 'binned time', 'charge [mV]', showing, nplots))
-        for newWfData in newChData:
-            minimumNewWf = np.min(newWfData)
-            minimumNewChData.append(minimumNewWf)
-            minimumIndexNew = np.where(newWfData == minimumNewWf)[0]
-            for indexNew in minimumIndexNew:
-                indexMinNewChData.append(indexNew)
-            if (np.min(newWfData) == minimumAllNewWf and countNewWfPlots < 3):
-                plots.append(plotting_plot(newWfData, 'Largest charge waveform for ch' + chr(ord('A') + ch), 'binned time', 'charge [mV]', showing))
-                countNewWfPlots += 1
-        plots.append(plotting_hist(indexMinNewChData, 500, 'Charge peak index for ch' + chr(ord('A') + ch), 'minimum charge bin index', 'frequency', showing))
-        nBins = round((np.max(minimumNewChData) - np.min(minimumNewChData)) / 0.4)
-        if nBins < 1:
-            nBins = 1
-        plots.append(plotting_hist(minimumNewChData, nBins, 
-                      'Charge peak frequency for ch' + chr(ord('A') + ch), 
-                      'minimum charge [mV]', 'frequency', showing))
-        minimumAllMaWf = np.min(maChData) 
-        for maWfData in maChData:
-            minimumMaWf = np.min(maWfData)
-            minimumMaChData.append(minimumMaWf)
-            minimumIndexMa = np.where(maWfData == minimumMaWf)[0]
-            for indexMa in minimumIndexMa:
-                indexMinMaChData.append(indexMa)
-            if (np.min(maWfData) == minimumAllMaWf and countMaWfPlots < 3):
-                plots.append(plotting_plot(maWfData, 'Largest charge waveform for ch' + chr(ord('A') + ch), 'binned time', 'charge [mV]', showing))
-                countMaWfPlots += 1
-        plots.append(plotting_hist(indexMinMaChData, 500, 'Charge peak index for ch' + chr(ord('A') + ch), 'minimum charge bin index', 'frequency', showing))
-        nBins = round((np.max(minimumMaChData) - np.min(minimumMaChData)) / 0.1)
-        if nBins < 1:
-            nBins = 1
-        plots.append(plotting_hist(minimumMaChData, nBins, 
-                      'Charge peak frequency for ch' + chr(ord('A') + ch), 
-                      'minimum charge [mV]', 'frequency', showing))
-        ch += 1
-        if saving == 0:
-            print("###### Saving...")
-            chOutputFileNp = outputFile + "_ch" + chr(ord('A') + ch)
-            np.save("{}_minimumMaChData.npy".format(chOutputFileNp), np.array(minimumMaChData))
-            saving_plots(plots, chOutputFile)
-    print("")
-print("Extraction and analysis finished !\n")
+name = sys.argv[1]
+if name == "pre-analyse":
+    print("\nStarting extraction and analysis...\n")
+    for inputFile in inputFileList: 
+        outputFile = outputDirectory + inputFile.removesuffix('.dat')
+        print("### Extracting data from '" + inputFile + "'...")
+        f = open(inputDirectory + inputFile, 'rb')
+        header = readHeader(f)
+        data = readData(f, header)
+        ch = 0
+        for chData in data:
+            print("###### Analyzing channel " + chr(ord('A') + ch) + "...")
+            chOutputFile = outputFile + "_ch" + chr(ord('A') + ch) + ".pdf"
+            countMaWfPlots = 0
+            countNewWfPlots = 0
+            plots = []
+            maChData = []
+            newChData = []
+            minimumMaChData = []
+            minimumNewChData = []
+            indexMinMaChData = []
+            indexMinNewChData = []
+            eventcounter = 0
+            for wfData in chData:
+                maWfData = moving_average(wfData, 10, windowlow, windowhigh)
+                #maWfData = histogramming(maWfData, 500)
+                maChData.append(maWfData)
+                #newWfData = histogramming(wfData, 500)
+                #newChData.append(newWfData)
+                eventcounter += 1
+                if eventcounter%5000==0:
+            	    print("event {}".format(eventcounter))
+            newChData = chData
+            print("######### Moving average and histogramming done...")
+            minimumAllNewWf = np.min(newChData) 
+            plots.append(plotting_plots(newChData, 'First {} waveforms for ch {}'.format(nplots, ch), 'binned time', 'charge [mV]', showing, nplots))
+            for newWfData in newChData:
+                minimumNewWf = np.min(newWfData)
+                minimumNewChData.append(minimumNewWf)
+                minimumIndexNew = np.where(newWfData == minimumNewWf)[0]
+                for indexNew in minimumIndexNew:
+                    indexMinNewChData.append(indexNew)
+                if (np.min(newWfData) == minimumAllNewWf and countNewWfPlots < 3):
+                    plots.append(plotting_plot(newWfData, 'Largest charge waveform for ch' + chr(ord('A') + ch), 'binned time', 'charge [mV]', showing))
+                    countNewWfPlots += 1
+            plots.append(plotting_hist(indexMinNewChData, 500, 'Charge peak index for ch' + chr(ord('A') + ch), 'minimum charge bin index', 'frequency', showing))
+            nBins = round((np.max(minimumNewChData) - np.min(minimumNewChData)) / 0.4)
+            if nBins < 1:
+                nBins = 1
+            plots.append(plotting_hist(minimumNewChData, nBins, 
+                         'Charge peak frequency for ch' + chr(ord('A') + ch), 
+                         'minimum charge [mV]', 'frequency', showing))
+            minimumAllMaWf = np.min(maChData) 
+            for maWfData in maChData:
+                minimumMaWf = np.min(maWfData)
+                minimumMaChData.append(minimumMaWf)
+                minimumIndexMa = np.where(maWfData == minimumMaWf)[0]
+                for indexMa in minimumIndexMa:
+                    indexMinMaChData.append(indexMa)
+                if (np.min(maWfData) == minimumAllMaWf and countMaWfPlots < 3):
+                    plots.append(plotting_plot(maWfData, 'Largest charge waveform for ch' + chr(ord('A') + ch), 'binned time', 'charge [mV]', showing))
+                    countMaWfPlots += 1
+            plots.append(plotting_hist(indexMinMaChData, 500, 'Charge peak index for ch' + chr(ord('A') + ch), 'minimum charge bin index', 'frequency', showing))
+            nBins = round((np.max(minimumMaChData) - np.min(minimumMaChData)) / 0.1)
+            if nBins < 1:
+                nBins = 1
+            plots.append(plotting_hist(minimumMaChData, nBins, 
+                         'Charge peak frequency for ch' + chr(ord('A') + ch), 
+                         'minimum charge [mV]', 'frequency', showing))
+            if saving == 0:
+                print("###### Saving...")
+                chOutputFileNp = outputFile + "_ch" + chr(ord('A') + ch)
+                np.save("{}_minimumMaChData.npy".format(chOutputFileNp), np.array(minimumMaChData))
+                saving_plots(plots, chOutputFile)
+            ch += 1
+        print("")
+    print("Extraction and analysis finished !\n")
+elif name == "analyse":
+    print("To be done...")
+else:
+    print("ERROR: You should either 'pre-analyse' or 'analyse' files...")
