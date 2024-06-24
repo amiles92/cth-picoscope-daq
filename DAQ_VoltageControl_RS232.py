@@ -355,8 +355,8 @@ while(EndFlag==0):
                     print("----------------------------------------------------")
                     print("Choose a default setup: (1, 2, 3, 4 or 5)")
                     try:
-                        DAQ_setup = int(input())
-                        if (DAQ_setup == 1):
+                        DAQ_setup = str(input())
+                        if (DAQ_setup == "1"):
                             daq.seriesSetDaqSettings(
                                 0, 2, 1000,
                                 0, 2, 1000,
@@ -364,7 +364,7 @@ while(EndFlag==0):
                                 0, 2, 1000,
                                 100, 2, 10000, 0)
                             DAQ_ParamsLoaded=1
-                        elif (DAQ_setup == 2):
+                        elif (DAQ_setup == "2"):
                             daq.seriesSetDaqSettings(
                                 0, 2, 1000,
                                 0, 99, 0,
@@ -372,7 +372,7 @@ while(EndFlag==0):
                                 0, 99, 0,
                                 100, 1, 10000, 0)
                             DAQ_ParamsLoaded=1
-                        elif (DAQ_setup == 3):
+                        elif (DAQ_setup == "3"):
                             daq.seriesSetDaqSettings(
                                 0, 2, 1200,
                                 0, 99, 0,
@@ -380,7 +380,7 @@ while(EndFlag==0):
                                 0, 99, 0,
                                 100, 0, 10000, 0)
                             DAQ_ParamsLoaded=1
-                        elif (DAQ_setup == 4):
+                        elif (DAQ_setup == "4"):
                             daq.seriesSetDaqSettings(
                                 0, 2, 1000,
                                 0, 2, 1000,
@@ -388,7 +388,7 @@ while(EndFlag==0):
                                 0, 2, 5000,
                                 100, 2, 10000, 0)
                             DAQ_ParamsLoaded=1
-                        elif (DAQ_setup == 5):
+                        elif (DAQ_setup == "5"):
                             daq.seriesSetDaqSettings(
                                 0, 2, 3000,
                                 0, 2, 3000,
