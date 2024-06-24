@@ -167,8 +167,10 @@ void SetVoltages(UNIT *unit, int16_t ranges[4])
 		}
 	}
 
-	if (count == 0) {throw invalid_argument("No active channels");}
-
+	if (count == 0) {
+		printf("No active channels\n");
+		throw invalid_argument("No active channels");
+	}
 
 	SetDefaults(unit);	// Put these changes into effect
 }
@@ -208,12 +210,13 @@ vector<vector<int16_t*>> SetDataBuffers(UNIT *unit, bitset<4> activeChannels,
 	uint64_t nMaxSamples = activeChannels.count() * maxPostSamples;
 	uint64_t picoMaxSamples;
 	uint64_t numWaveforms64 = numWaveforms;
+	uint8_t activeCh = 0;
 
 	PICO_STATUS status = ps6000aMemorySegments(unit->handle, numWaveforms64, &picoMaxSamples);
 	if (status != PICO_OK)
 	{
 		printf("PICO status code: %d\n", status);
-		throw "Improperly set pico memory segments";
+		throw runtime_error("Improperly set pico memory segments");
 	}
 	if (picoMaxSamples < nMaxSamples)
 	{
@@ -230,20 +233,22 @@ vector<vector<int16_t*>> SetDataBuffers(UNIT *unit, bitset<4> activeChannels,
 		if (!activeChannels.test(i)) {continue;}
 
 		uint32_t chSamples = samplesPreTrigger + samplesPostPerChannel.at(i);
-		outBuffers.at(i) = vector<int16_t*>(numWaveforms);
+		outBuffers.at(activeCh) = vector<int16_t*>(numWaveforms);
 
 		for (uint64_t j = 0; j < numWaveforms; j++)
 		{
-			outBuffers.at(i).at(j) = (int16_t*) calloc(chSamples, sizeof(int16_t));
-			if (outBuffers.at(i).at(j) == NULL)
+			outBuffers.at(activeCh).at(j) = (int16_t*) calloc(chSamples, sizeof(int16_t));
+			if (outBuffers.at(activeCh).at(j) == NULL)
 			{
 				printf("Memory allocation failed: Ch %d, Wf %d\n", i, (int) j);
 			}
 			ps6000aSetDataBuffer(unit->handle, (PICO_CHANNEL) (i),
-				outBuffers.at(i).at(j), chSamples, PICO_INT16_T, j, 
+				outBuffers.at(activeCh).at(j), chSamples, PICO_INT16_T, j, 
 				PICO_RATIO_MODE_RAW, action);
 			action = PICO_ADD;
 		}
+		activeCh++;
+		printf("Channel %c data buffers set\n", char('A') + i);
 	}
 
 	return outBuffers;
@@ -269,7 +274,8 @@ void SetMultiTriggerSettings(UNIT *unit, bitset<5> triggers, vector<int8_t> thre
 {   // NOTE: Ignores external channel
 	assert(thresholds.size() == 4);
 
-	throw "I haven't made this function yet: SetMultiTriggerSettings";
+	printf("I haven't made this function yet: SetMultiTriggerSettings\n");
+	throw runtime_error("I haven't made this function yet: SetMultiTriggerSettings");
 
 	// RECAP FROM LAST TIME: WRITING SIMPLE ONE TRIGGER AND COMBINED SIMPLE TRIGGERS
 	// USING ARRAY OF PS6000_TRIGGER_CONDITIONS STRCTURES
@@ -282,7 +288,8 @@ void SetTriggers(UNIT *unit, bitset<5> triggers, vector<int16_t> chThreshold, in
 	
 	if (triggers.count() == 0)
 	{
-		throw "No set triggers";
+		printf("No set triggers\n");
+		throw runtime_error("No set triggers");
 	}
 	if (triggers.count() == 1)
 	{
@@ -380,7 +387,7 @@ void StartRapidBlock(UNIT *unit, uint16_t preTrigger, uint16_t postTriggerMax,
 		printf("Rapid capture aborted. %d complete blocks were captured\n", (int) nCompletedCaptures);
 		printf("Early abort writeout not yet supported\n");
 
-		throw "aborted, need to implement early cancellation writeout";
+		throw runtime_error("aborted, need to implement early cancellation writeout");
 
 	}
 

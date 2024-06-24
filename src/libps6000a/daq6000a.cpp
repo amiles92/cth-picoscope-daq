@@ -360,9 +360,12 @@ int seriesSetDaqSettings(
     try
     {
         setActiveChannels(g_dcc, chAVRange, chBVRange, chCVRange, chDVRange);
+        printf("Active channels set\n");
         setTriggerConfig(g_dcc, chATrigger, chBTrigger, chCTrigger, chDTrigger, auxTrigger);
+        printf("Trigger channels set\n");
         setDataConfig(g_dcc, &timebase, &numWaveforms, &samplesPreTrigger, 
                 &chAWfSamples, &chBWfSamples, &chCWfSamples, &chDWfSamples);
+        printf("All settings configured\n\n");
         g_dcc.dataConfigured = TRUE;
     }
     catch (exception e)
@@ -442,13 +445,14 @@ int runFullDAQ(char *outputFile,
                     &chAWfSamples, &chBWfSamples, &chCWfSamples, &chDWfSamples);
 
         collectRapidBlockData(dcc);
+        CloseDevice(unit);
+        printf("Device closed\n");
         setDataOutput(dcc, outputFile);
         writeDataHeader(dcc);
         writeDataOut(dcc);
         closeDataOutput(dcc);
         printf("Data written to %s\n", outputFile);
-        CloseDevice(unit);
-        printf("Device closed\n");
+        freeDataBuffers(dcc);
     }
     catch (exception e)
     {
