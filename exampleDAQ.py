@@ -1,6 +1,6 @@
 import daq6000a as daq
 
-outFile1 = r"./example1.dat"
+outFile1 = r"./data/24Jun24/24Jun24_80V_Dark_MPPC1.dat"
 outFile2 = r"./example2.dat"
 outFile3 = r"./example3.dat"
 outFile4 = r"./example4.dat"
@@ -11,13 +11,13 @@ picoscopes = ['IW098/0028']
 # if len(picoscopes) > 1:
 print(picoscopes)
 status = 0
-# status = daq.runFullDAQ(outFile1,
-#             0, 2, 1100,
-#             0, 2, 1000,
-#             0, 2, 1000,
-#             0, 2, 1000,
-#             100, 2, 20, 0, picoscopes[0])
-
+status = daq.runFullDAQ(outFile1,
+             0, 2, 3000,
+             0, 2, 3000,
+             0, 2, 3000,
+             0, 2, 3000,
+             100, 2, 50000, 0, picoscopes[0])
+exit()
 status = daq.seriesInitDaq(picoscopes[0])
 if status == 0:
     print("Python - Device not opened")
@@ -44,3 +44,4 @@ daq.seriesCollectData(outFile4)
 daq.seriesCloseDaq()
 
 print("\nPython - Daq response:", status)
+
