@@ -282,6 +282,9 @@ while(EndFlag==0):
                      
             elif(VComm=="SetDAQ"):
                 print("Setup DAQ with one of the default setups? (y/n): ")
+                if(DAQ_End==1):
+                    print("DAQ already stopped!")
+                    continue
                 DAQ_default = str(input())
                 if (DAQ_default=="n" or DAQ_default=="no" or DAQ_default=="N" or DAQ_default=="No"):
                     print("Input DAQ settings as:")
@@ -407,6 +410,9 @@ while(EndFlag==0):
                 
                 
             elif(VComm=="StartDAQ"):
+                if(DAQ_End==1):
+                    print("DAQ already stopped!")
+                    continue
                 if (DAQ_ParamsLoaded != 1):
                     print("Set some DAQ parameters first!")
                 else:           
