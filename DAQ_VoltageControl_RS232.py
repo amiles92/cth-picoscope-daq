@@ -25,7 +25,7 @@ import matplotlib.pyplot as plt
 import daq6000a as daq
 
 args = sys.argv
-numberargs = 6
+numberargs = 7
 ExitFlag=0
 if(len(args)!=numberargs): 
     print('Use this file to set voltage on Keithley 6487 Picoammeter + Voltage Source: ')
@@ -37,6 +37,7 @@ if(len(args)!=numberargs):
     print(' [3] Voltage Increment Before Threshold Voltage (.1f)')
     print(' [4] Threshold Voltage (above which voltage ramp is in steps of [5]) (.1f)')
     print(' [5] Voltage Increment After Threshold Voltage (.1f)')
+    print(' [6] InitDAQ = 1, else use 0')
     print(' ')
     print('If not working make sure permissions have been given to communicate via USB port')
     print('E.g. sudo chmod 666 /dev/{Correct USB port}')
@@ -55,6 +56,7 @@ if(len(args)>1):
         print(' [3] Voltage Increment Before Threshold Voltage (.1f)')
         print(' [4] Threshold Voltage (above which voltage ramp is in steps of [5]) (.1f)')
         print(' [5] Voltage Increment After Threshold Voltage (.1f)')
+        print(' [6] InitDAQ = 1, else use 0')
         print(' ')
         print('If not working make sure permissions have been given to communicate via USB port')
         print('E.g. sudo chmod 666 /dev/{Correct USB port}')
@@ -186,15 +188,17 @@ CompFlag=0 #Error flag
 #CurrentVoltage = what the voltage should be
 #VoltageRead = what the voltage read from the instrument is
 
+DAQ_Init = str(args[6])
 DAQ_ParamsLoaded = 0
 DAQ_End = 0
 picoscopes = ['IW098/0028']
-print("Picoscope:", picoscopes)
-status = 0
-status = daq.seriesInitDaq(picoscopes[0])
-if status == 0:
-    print("Python - DAQ device not opened correctly")
-print(status)
+if (DAQ_Init == "1"):
+    print("Picoscope:", picoscopes)
+    status = 0
+    status = daq.seriesInitDaq(picoscopes[0])
+    if status == 0:
+        print("Python - DAQ device not opened correctly")
+        print(status)
 while(EndFlag==0):
 
     CurrentVoltage = VoltageRead #Keep track of voltage as increase it
@@ -282,10 +286,13 @@ while(EndFlag==0):
                 print("")
                      
             elif(VComm=="SetDAQ"):
-                print("Setup DAQ with one of the default setups? (y/n): ")
+                if(DAQ_Init!=1):
+                    print("DAQ not initialized yet, do ResetDAQ first")
+                    continue
                 if(DAQ_End==1):
                     print("DAQ already stopped!")
                     continue
+                print("Setup DAQ with one of the default setups? (y/n): ")
                 DAQ_default = str(input())
                 if (DAQ_default=="n" or DAQ_default=="no" or DAQ_default=="N" or DAQ_default=="No"):
                     print("Input DAQ settings as:")
@@ -414,6 +421,9 @@ while(EndFlag==0):
                 
                 
             elif(VComm=="StartDAQ"):
+                if(DAQ_Init!=1):
+                    print("DAQ not initialized yet, do ResetDAQ first")
+                    continue
                 if(DAQ_End==1):
                     print("DAQ already stopped!")
                     continue
@@ -432,20 +442,26 @@ while(EndFlag==0):
                         print("Ramping voltage down now!") 
 
             elif(VComm=="StopDAQ"):
+                if(DAQ_Init!=1):
+                    print("DAQ not initialized yet, do ResetDAQ first")
+                    continue
                 if (DAQ_End != 0):
                     print("DAQ already stopped.")
                 else:
-                    DAQ_End=1
+                    DAQ_End = 1 
+                    DAQ_ParamsLoaded = 0
+                    DAQ_Init = "0"
                     daq.seriesCloseDaq()
 
             elif(VComm=="ResetDAQ"):
-                if (DAQ_End !=0):
+                if (DAQ_End == 1):
                     status = 0
                     status = daq.seriesInitDaq(picoscopes[0])
                     if status == 0:
                         print("Python - DAQ device not opened correctly")
                         print(status)
-                    DAQ_End=0
+                    DAQ_End = 0
+                    DAQ_Init = "1"
                 else:
                     print("The DAQ system needs to be stopped to reset!")
                 
