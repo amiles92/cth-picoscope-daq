@@ -13,6 +13,7 @@ Arguments
 [3] = Voltage Increment Before Threshold
 [4] = Threshold Voltage
 [5] = Voltage Increment After Threshold
+[6] InitDAQ = 1, else use 0'
 
 """
 import sys
@@ -30,7 +31,7 @@ ExitFlag=0
 if(len(args)!=numberargs): 
     print('Use this file to set voltage on Keithley 6487 Picoammeter + Voltage Source: ')
     print(' ')
-    print('sudo python VoltageControl_RS232.py [1] [2] [3] [4] [5]')
+    print('sudo python DAQ_VoltageControl_RS232.py [1] [2] [3] [4] [5] [6]')
     print(' ')
     print(' [1] Reset Connection = 1, else use 0')
     print(' [2] Voltage Level Required (.1f)')
@@ -49,7 +50,7 @@ if(len(args)>1):
     if (args[1]=='-help' or args[1]=='-h'):
         print('Use this file to set voltage on Keithley 6487 Picoammeter + Voltage Source: ')
         print(' ')
-        print('sudo python VoltageControl_RS232.py [1] [2] [3] [4] [5]')
+        print('sudo python DAQ_VoltageControl_RS232.py [1] [2] [3] [4] [5] [6]')
         print(' ')
         print(' [1] Reset Connection = 1, else use 0')
         print(' [2] Voltage Level Required (.1f)')
@@ -199,6 +200,9 @@ if (DAQ_Init == "1"):
     if status == 0:
         print("Python - DAQ device not opened correctly")
         print(status)
+else: 
+    print("DAQ not initialized at launch because of arg [6]")
+    DAQ_End = 1
 while(EndFlag==0):
 
     CurrentVoltage = VoltageRead #Keep track of voltage as increase it
@@ -286,7 +290,7 @@ while(EndFlag==0):
                 print("")
                      
             elif(VComm=="SetDAQ"):
-                if(DAQ_Init!=1):
+                if(DAQ_Init!="1"):
                     print("DAQ not initialized yet, do ResetDAQ first")
                     continue
                 if(DAQ_End==1):
@@ -421,7 +425,7 @@ while(EndFlag==0):
                 
                 
             elif(VComm=="StartDAQ"):
-                if(DAQ_Init!=1):
+                if(DAQ_Init!="1"):
                     print("DAQ not initialized yet, do ResetDAQ first")
                     continue
                 if(DAQ_End==1):
@@ -442,7 +446,7 @@ while(EndFlag==0):
                         print("Ramping voltage down now!") 
 
             elif(VComm=="StopDAQ"):
-                if(DAQ_Init!=1):
+                if(DAQ_Init!="1"):
                     print("DAQ not initialized yet, do ResetDAQ first")
                     continue
                 if (DAQ_End != 0):
@@ -452,6 +456,7 @@ while(EndFlag==0):
                     DAQ_ParamsLoaded = 0
                     DAQ_Init = "0"
                     daq.seriesCloseDaq()
+                    print("DAQ stopped.")
 
             elif(VComm=="ResetDAQ"):
                 if (DAQ_End == 1):
