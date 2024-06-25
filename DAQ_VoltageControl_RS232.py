@@ -312,7 +312,7 @@ while(EndFlag==0):
                     print("ChD: 0, 2, 1000,")
                     print("AuxTrigger: 100")
                     print("Timebase: 2 (0.8ns)")
-                    print("NumWaveforms: 10000")
+                    print("NumWaveforms: 50000")
                     print("SamplesPreTrigger: 0")
                     print("----------------------------------------------------")
                     print("Setup 2: Faster pulse catching, 2 channels")
@@ -322,7 +322,7 @@ while(EndFlag==0):
                     print("ChD: 0, 99, 0,")
                     print("AuxTrigger: 100")
                     print("Timebase: 1 (0.4ns)")
-                    print("NumWaveforms: 10000")
+                    print("NumWaveforms: 50000")
                     print("SamplesPreTrigger: 0")
                     print("----------------------------------------------------")
                     print("Setup 3: Fastest pulse catching, 1 channel")
@@ -332,7 +332,7 @@ while(EndFlag==0):
                     print("ChD: 0, 99, 0,")
                     print("AuxTrigger: 100")
                     print("Timebase: 0 (0.2ns)")
-                    print("NumWaveforms: 10000")
+                    print("NumWaveforms: 50000")
                     print("SamplesPreTrigger: 0")
                     print("----------------------------------------------------")
                     print("Setup 4: 3 MPPC + 1 PMT, LED")
@@ -343,7 +343,7 @@ while(EndFlag==0):
                     print("ChD: 0, 2, 5000,")
                     print("AuxTrigger: 100")
                     print("Timebase: 2 (0.8ns)")
-                    print("NumWaveforms: 10000")
+                    print("NumWaveforms: 50000")
                     print("SamplesPreTrigger: 0")
                     print("----------------------------------------------------")
                     print("Setup 5: 3 MPPC + 1 PMT, Dark photons")
@@ -353,7 +353,7 @@ while(EndFlag==0):
                     print("ChD: 0, 2, 3000,")
                     print("AuxTrigger: 100")
                     print("Timebase: 2 (0.8ns)")
-                    print("NumWaveforms: 10000")
+                    print("NumWaveforms: 50000")
                     print("SamplesPreTrigger: 0")
                     print("----------------------------------------------------")
                     print("Choose a default setup: (1, 2, 3, 4 or 5)")
@@ -365,7 +365,7 @@ while(EndFlag==0):
                                 0, 2, 1000,
                                 0, 2, 1000,
                                 0, 2, 1000,
-                                100, 2, 10000, 0)
+                                100, 2, 50000, 0)
                             DAQ_ParamsLoaded=1
                         elif (DAQ_setup == "2"):
                             daq.seriesSetDaqSettings(
@@ -373,7 +373,7 @@ while(EndFlag==0):
                                 0, 99, 0,
                                 0, 2, 1000,
                                 0, 99, 0,
-                                100, 1, 10000, 0)
+                                100, 1, 50000, 0)
                             DAQ_ParamsLoaded=1
                         elif (DAQ_setup == "3"):
                             daq.seriesSetDaqSettings(
@@ -381,7 +381,7 @@ while(EndFlag==0):
                                 0, 99, 0,
                                 0, 99, 0,
                                 0, 99, 0,
-                                100, 0, 10000, 0)
+                                100, 0, 50000, 0)
                             DAQ_ParamsLoaded=1
                         elif (DAQ_setup == "4"):
                             print("This setup has an error that I haven't fixed, please choose another setup")
@@ -391,7 +391,7 @@ while(EndFlag==0):
                                 0, 2, 1000,
                                 0, 2, 1000,
                                 0, 2, 5000,
-                                100, 2, 10000, 0)
+                                100, 2, 50000, 0)
                             DAQ_ParamsLoaded=1
                         elif (DAQ_setup == "5"):
                             daq.seriesSetDaqSettings(
@@ -399,7 +399,7 @@ while(EndFlag==0):
                                 0, 2, 3000,
                                 0, 2, 3000,
                                 0, 2, 3000,
-                                100, 2, 10000, 0)
+                                100, 2, 50000, 0)
                             DAQ_ParamsLoaded=1
                         else:
                             print(DAQ_setup, "Error occured during setup setting")
