@@ -199,7 +199,9 @@ if (DAQ_Init == "1"):
     if status == 0:
         print("Python - DAQ device not opened correctly")
         print(status)
-else: DAQ_End = 1
+else: 
+    print("DAQ not initialized at launch because of arg [6]")
+    DAQ_End = 1
 while(EndFlag==0):
 
     CurrentVoltage = VoltageRead #Keep track of voltage as increase it
