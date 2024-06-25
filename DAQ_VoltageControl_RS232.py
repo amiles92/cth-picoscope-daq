@@ -13,6 +13,7 @@ Arguments
 [3] = Voltage Increment Before Threshold
 [4] = Threshold Voltage
 [5] = Voltage Increment After Threshold
+[6] InitDAQ = 1, else use 0'
 
 """
 import sys
@@ -30,7 +31,7 @@ ExitFlag=0
 if(len(args)!=numberargs): 
     print('Use this file to set voltage on Keithley 6487 Picoammeter + Voltage Source: ')
     print(' ')
-    print('sudo python VoltageControl_RS232.py [1] [2] [3] [4] [5]')
+    print('sudo python DAQ_VoltageControl_RS232.py [1] [2] [3] [4] [5]')
     print(' ')
     print(' [1] Reset Connection = 1, else use 0')
     print(' [2] Voltage Level Required (.1f)')
