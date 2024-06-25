@@ -272,6 +272,7 @@ while(EndFlag==0):
                 print("SetDAQ => set the data acquisition system parameters")
                 print("StartDAQ => start the data acquisition system")
                 print("StopDAQ => stop the data acquisition system")
+                print("ResetDAQ => reset the data acquisition system")
                 print("NI => set new voltage increment for below the threshold voltage")
                 print("TI => set new voltage increment for above the threshold voltage")
                 print("TV => set new threshold voltage")
@@ -436,6 +437,17 @@ while(EndFlag==0):
                 else:
                     DAQ_End=1
                     daq.seriesCloseDaq()
+
+            elif(VComm=="ResetDAQ"):
+                if (DAQ_End !=0):
+                    status = 0
+                    status = daq.seriesInitDaq(picoscopes[0])
+                    if status == 0:
+                        print("Python - DAQ device not opened correctly")
+                        print(status)
+                    DAQ_End=0
+                else:
+                    print("The DAQ system needs to be stopped to reset!")
                 
             elif(VComm=="NI"):
                 print("Enter new below threshold increment voltage (0.1f): ")
