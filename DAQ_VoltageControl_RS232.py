@@ -336,6 +336,7 @@ while(EndFlag==0):
                     print("SamplesPreTrigger: 0")
                     print("----------------------------------------------------")
                     print("Setup 4: 3 MPPC + 1 PMT, LED")
+                    print("Note that this does not work for the time being")
                     print("ChA: 0, 2, 1000")
                     print("ChB: 0, 2, 1000,")
                     print("ChC: 0, 2, 1000,")
@@ -383,6 +384,8 @@ while(EndFlag==0):
                                 100, 0, 10000, 0)
                             DAQ_ParamsLoaded=1
                         elif (DAQ_setup == "4"):
+                            print("This setup has an error that I haven't fixed, please choose another setup")
+                            continue
                             daq.seriesSetDaqSettings(
                                 0, 2, 1000,
                                 0, 2, 1000,

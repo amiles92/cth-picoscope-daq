@@ -389,6 +389,7 @@ int seriesCollectData(char *outputFile)
     try
     {
         collectRapidBlockData(g_dcc);
+        printf("Data collected\n");
         setDataOutput(g_dcc, outputFile);
         writeDataHeader(g_dcc);
         writeDataOut(g_dcc);

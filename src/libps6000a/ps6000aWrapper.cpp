@@ -405,7 +405,7 @@ void StartRapidBlock(UNIT *unit, uint16_t preTrigger, uint16_t postTriggerMax,
 
 	// Get data
 	status = ps6000aGetValuesBulk(unit->handle, 0, &nSamples, 0, numWaveforms - 1, 
-			1, PICO_RATIO_MODE_RAW, NULL);
+			1, PICO_RATIO_MODE_RAW, NULL); // XXX: Fix this for different sample lengths
 	
 	// ps6000GetValuesTriggerTimeOffsetBulk64
 
