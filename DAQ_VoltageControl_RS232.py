@@ -31,7 +31,7 @@ ExitFlag=0
 if(len(args)!=numberargs): 
     print('Use this file to set voltage on Keithley 6487 Picoammeter + Voltage Source: ')
     print(' ')
-    print('sudo python DAQ_VoltageControl_RS232.py [1] [2] [3] [4] [5]')
+    print('sudo python DAQ_VoltageControl_RS232.py [1] [2] [3] [4] [5] [6]')
     print(' ')
     print(' [1] Reset Connection = 1, else use 0')
     print(' [2] Voltage Level Required (.1f)')
@@ -50,7 +50,7 @@ if(len(args)>1):
     if (args[1]=='-help' or args[1]=='-h'):
         print('Use this file to set voltage on Keithley 6487 Picoammeter + Voltage Source: ')
         print(' ')
-        print('sudo python VoltageControl_RS232.py [1] [2] [3] [4] [5]')
+        print('sudo python DAQ_VoltageControl_RS232.py [1] [2] [3] [4] [5] [6]')
         print(' ')
         print(' [1] Reset Connection = 1, else use 0')
         print(' [2] Voltage Level Required (.1f)')
