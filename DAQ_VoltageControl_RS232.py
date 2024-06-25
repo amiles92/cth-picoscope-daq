@@ -286,7 +286,7 @@ while(EndFlag==0):
                 print("")
                      
             elif(VComm=="SetDAQ"):
-                if(DAQ_Init!=1):
+                if(DAQ_Init!="1"):
                     print("DAQ not initialized yet, do ResetDAQ first")
                     continue
                 if(DAQ_End==1):
@@ -421,7 +421,7 @@ while(EndFlag==0):
                 
                 
             elif(VComm=="StartDAQ"):
-                if(DAQ_Init!=1):
+                if(DAQ_Init!="1"):
                     print("DAQ not initialized yet, do ResetDAQ first")
                     continue
                 if(DAQ_End==1):
@@ -442,7 +442,7 @@ while(EndFlag==0):
                         print("Ramping voltage down now!") 
 
             elif(VComm=="StopDAQ"):
-                if(DAQ_Init!=1):
+                if(DAQ_Init!="1"):
                     print("DAQ not initialized yet, do ResetDAQ first")
                     continue
                 if (DAQ_End != 0):
