@@ -199,6 +199,7 @@ if (DAQ_Init == "1"):
     if status == 0:
         print("Python - DAQ device not opened correctly")
         print(status)
+else: DAQ_End = 1
 while(EndFlag==0):
 
     CurrentVoltage = VoltageRead #Keep track of voltage as increase it
@@ -452,6 +453,7 @@ while(EndFlag==0):
                     DAQ_ParamsLoaded = 0
                     DAQ_Init = "0"
                     daq.seriesCloseDaq()
+                    print("DAQ stopped.")
 
             elif(VComm=="ResetDAQ"):
                 if (DAQ_End == 1):
