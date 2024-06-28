@@ -46,6 +46,15 @@ public:
     }
 };
 
+bool isLittleEndian()
+{
+    uint32_t i = 1;
+    char *c = (char*)&i;
+    return bool(*c);
+}
+
+bool g_littleEndian = isLittleEndian();
+
 UNIT g_unit;
 dataCollectionConfig g_dcc(&g_unit, (char*) "");
 
@@ -180,34 +189,27 @@ void closeDataOutput(dataCollectionConfig &dcc)
     return;
 }
 
-bool isLittleEndian()
-{
-    uint32_t i = 1;
-    char *c = (char*)&i;
-    return bool(*c);
-}
-
 int16_t bswap16(int16_t n)
 {
-    if (isLittleEndian()) {return __builtin_bswap16(n);}
+    if (g_littleEndian) {return __builtin_bswap16(n);}
     else {return n;}
 }
 
 uint16_t bswapu16(uint16_t n)
 {
-    if (isLittleEndian()) {return __builtin_bswap16(n);}
+    if (g_littleEndian) {return __builtin_bswap16(n);}
     else {return n;}
 }
 
 int32_t bswap32(int32_t n)
 {
-    if (isLittleEndian()) {return __builtin_bswap32(n);}
+    if (g_littleEndian) {return __builtin_bswap32(n);}
     else {return n;}
 }
 
 uint32_t bswapu32(uint32_t n)
 {
-    if (isLittleEndian()) {return __builtin_bswap32(n);}
+    if (g_littleEndian) {return __builtin_bswap32(n);}
     else {return n;}
 }
 
