@@ -46,6 +46,15 @@ public:
     }
 };
 
+bool isLittleEndian()
+{
+    uint32_t i = 1;
+    char *c = (char*)&i;
+    return bool(*c);
+}
+
+bool g_littleEndian = isLittleEndian();
+
 UNIT g_unit;
 dataCollectionConfig g_dcc(g_unit, (char*) "");
 vector<dataCollectionConfig> g_vecDcc;
@@ -216,34 +225,27 @@ void closeDataOutput(ofstream &of)
     return;
 }
 
-bool isLittleEndian()
-{
-    uint32_t i = 1;
-    char *c = (char*)&i;
-    return bool(*c);
-}
-
 int16_t bswap16(int16_t n)
 {
-    if (isLittleEndian()) {return __builtin_bswap16(n);}
+    if (g_littleEndian) {return __builtin_bswap16(n);}
     else {return n;}
 }
 
 uint16_t bswapu16(uint16_t n)
 {
-    if (isLittleEndian()) {return __builtin_bswap16(n);}
+    if (g_littleEndian) {return __builtin_bswap16(n);}
     else {return n;}
 }
 
 int32_t bswap32(int32_t n)
 {
-    if (isLittleEndian()) {return __builtin_bswap32(n);}
+    if (g_littleEndian) {return __builtin_bswap32(n);}
     else {return n;}
 }
 
 uint32_t bswapu32(uint32_t n)
 {
-    if (isLittleEndian()) {return __builtin_bswap32(n);}
+    if (g_littleEndian) {return __builtin_bswap32(n);}
     else {return n;}
 }
 
@@ -430,9 +432,12 @@ int seriesSetDaqSettings(
     try
     {
         setActiveChannels(g_dcc, chAVRange, chBVRange, chCVRange, chDVRange);
+        printf("Active channels set\n");
         setTriggerConfig(g_dcc, chATrigger, chBTrigger, chCTrigger, chDTrigger, auxTrigger);
+        printf("Trigger channels set\n");
         setDataConfig(g_dcc, &timebase, &numWaveforms, &samplesPreTrigger, 
                 &chAWfSamples, &chBWfSamples, &chCWfSamples, &chDWfSamples);
+        printf("All settings configured\n\n");
         g_dcc.dataConfigured = TRUE;
         printf("Data settings updated\n");
     }
@@ -625,6 +630,7 @@ int runFullDAQ(char *outputFileBasename,
                     &chAWfSamples, &chBWfSamples, &chCWfSamples, &chDWfSamples);
 
         collectRapidBlockData(dcc);
+
         ofstream of;
         char *outputFile = concatTwoChar(outputFileBasename, (char *) ".dat");
         setDataOutput(outputFile, of);
@@ -632,7 +638,6 @@ int runFullDAQ(char *outputFileBasename,
         writeDataOut(dcc, of);
         closeDataOutput(of);
         printf("Data written to %s\n", outputFile);
-        freeDataBuffers(dcc);
         CloseDevice(unit);
         printf("Device closed\n");
     }
