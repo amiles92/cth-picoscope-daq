@@ -48,6 +48,7 @@ uint16_t inputRanges [PICO_X1_PROBE_RANGES] = {	10,
 												5000,
 												10000,
 												20000};
+
 BOOL	g_ready = FALSE;
 uint8_t g_multiReady = 0;
 
@@ -408,20 +409,20 @@ void StartMultiRapidBlock(vector<UNIT *> vecUnit, vector<uint16_t> vecPreTrigger
 	vector<uint32_t> vecNumWaveforms)
 {
 	uint8_t len = vecUnit.size();
-	// __builtin_popcount(x)
-	// Start timer
-	// Run
-	// 
+	PICO_STATUS status;
+	vector<double> vecTimeIndisposed(len);
+	vector<uint64_t> vecNCompletedCaptures(len);
+	vector<uint32_t> vecTimebase32(len);
+	vector<uint64_t> vecPreTrigger64(len);
+	vector<uint64_t> vecPostTriggerMax64(len);
 
 	g_multiReady = 0;
 
-	vector<void *> vecIntegers;
-
 	for (int i = 0; i < len; i++)
 	{
-		uint8_t tmp_i = i;
-		vecIntegers.push_back(&tmp_i);
-		
+		vecTimebase32.at(i) = vecTimebase.at(i);
+		vecPreTrigger64.at(i) = vecPreTrigger.at(i);
+		vecPostTriggerMax64.at(i) = vecPostTriggerMax.at(i);
 	}
 
 	printf("\n\nStarting DAQ\n\n");
@@ -430,22 +431,28 @@ void StartMultiRapidBlock(vector<UNIT *> vecUnit, vector<uint16_t> vecPreTrigger
 
 	for (int i = 0; i < len; i++)
 	{
-		ps6000aRunBlock(unit->handle, preTrigger64, postTriggerMax64, timebase32,
-			&timeIndisposed, 0, MultiCallBackBlock, NULL);
+		intptr_t iPt = i;
+		ps6000aRunBlock(vecUnit.at(i)->handle, vecPreTrigger64.at(i), 
+			vecPostTriggerMax64.at(i), vecTimebase32.at(i),
+			&vecTimeIndisposed.at(i), 0, MultiCallBackBlock, (void*) iPt);
 	}
 	
-	while (!g_ready && !_kbhit()) // XXX: Should change to only cancel if getch == ctrl+c
+	while (!(len <= __builtin_popcount(g_multiReady)) && !_kbhit()) // XXX: Should change to only cancel if getch == ctrl+c
 	{
 		usleep(0);
 	}
 
-	if (!g_ready)
+	if (!(len <= __builtin_popcount(g_multiReady)))
 	{
 		_getch();
-		status = ps6000Stop(unit->handle);
-		status = ps6000GetNoOfCaptures(unit->handle, &nCompletedCaptures);
-
-		printf("Rapid capture aborted. %d complete blocks were captured\n", nCompletedCaptures);
+		for (int i = 0; i < len; i++)
+		{
+			status = ps6000aStop(vecUnit.at(i)->handle);
+			status = ps6000aGetNoOfCaptures(vecUnit.at(i)->handle, &vecNCompletedCaptures.at(i));
+		printf("Rapid capture aborted.\n");
+		printf("%s: %d complete blocks were captured\n", vecUnit.at(i)->serial, 
+			(int) vecNCompletedCaptures.at(i));
+		}
 		printf("Early abort writeout not yet supported\n");
 
 		throw "aborted, need to implement early cancellation writeout";
@@ -457,7 +464,26 @@ void StartMultiRapidBlock(vector<UNIT *> vecUnit, vector<uint16_t> vecPreTrigger
 	int time = chrono::duration_cast<std::chrono::milliseconds>(end - begin).count();
 
 	printf("Time taken: %d ms\n", time);
-	printf("Trigger rate: %f Hz\n", (double) numWaveforms / time * 1.0e3);
+	for (int i = 0; i < len; i++)
+	{
+		printf("%s: Trigger rate: %f Hz\n", vecUnit.at(i)->serial,
+			(double) vecNumWaveforms.at(i) / time * 1.0e3);
+
+		status = ps6000aGetNoOfCaptures(vecUnit.at(i)->handle, &vecNCompletedCaptures.at(i));
+
+
+		uint64_t nSamples = vecPreTrigger.at(i) + vecPostTriggerMax.at(i);
+
+		// Get data
+		status = ps6000aGetValuesBulk(vecUnit.at(i)->handle, 0, &nSamples, 0, 
+				vecNumWaveforms.at(i) - 1, 1, PICO_RATIO_MODE_RAW, NULL);
+
+		// Stop
+		status = ps6000aStop(vecUnit.at(i)->handle);
+
+		status = ps6000aMemorySegments(vecUnit.at(i)->handle, 1, &nSamples);
+		status = ps6000aSetNoOfCaptures(vecUnit.at(i)->handle, 1);
+	}
 }
 
 PICO_STATUS OpenDevice(UNIT *unit, int8_t *serial)
@@ -604,10 +630,10 @@ void PREF4 CallBackBlock(int16_t handle, PICO_STATUS status, void * pParameter)
 
 void PREF4 MultiCallBackBlock(int16_t handle, PICO_STATUS status, void *pParameter)
 {
-	uint8_t *runId = (uint8_t *) pParameter;
+	intptr_t runId = (intptr_t) pParameter;
 	if (status != PICO_CANCELLED)
 	{
-		g_multiReady |= 1 << *runId;
+		g_multiReady |= 1 << runId;
 	}
 }
 

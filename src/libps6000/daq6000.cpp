@@ -225,21 +225,23 @@ void bitset_reverse(std::bitset<N> &b)
 
 void writeDataHeader(dataCollectionConfig &dcc)
 {
-    // Bit layout, in order
-    // 4 bits: timebase (from 0-4 for ps6000)
-    // 4 bits: ch1-4 active
-    // 3 bits: padding
-    // 5 bits: ch1-4, aux trigger active
-    // 16 bits: aux trigger threshold
-    // 64 (16*4) bits: trigger threshold (ch1-4)
-    // 16 (4*4): ch1-4 voltage ranges (aux is always +-1V range)
-    // 64 (4*16) bits: number of TOTAL samples per waveform (including pretrigger)
-    // 16 bits: number of samples before trigger
-    // 32 bits: number of waveforms
-    // 32 bits: unix timestamp (signed integer)
-    // total above bits: 232 (29 bytes)
-    // Flexible length, 0 terminated: model string
-    // Flexible length, 0 terminated: serial number
+    /*
+     * Bit layout, in order
+     * 4 bits: timebase (from 0-4 for ps6000)
+     * 4 bits: ch1-4 active
+     * 3 bits: padding
+     * 5 bits: ch1-4, aux trigger active
+     * 16 bits: aux trigger threshold
+     * 64 (16*4) bits: trigger threshold (ch1-4)
+     * 16 (4*4): ch1-4 voltage ranges (aux is always +-1V range)
+     * 64 (4*16) bits: number of TOTAL samples per waveform (including pretrigger)
+     * 16 bits: number of samples before trigger
+     * 32 bits: number of waveforms
+     * 32 bits: unix timestamp (signed integer)
+     * total above bits: 232 (29 bytes)
+     * Flexible length, 0 terminated: model string
+     * Flexible length, 0 terminated: serial number
+    */
 
     int16_t o16;
     uint16_t ou16;

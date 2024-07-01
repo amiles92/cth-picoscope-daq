@@ -7,6 +7,7 @@
 #include <bitset>
 #include <vector>
 #include <assert.h>
+#include <memory>
 
 #ifndef PS6000WRAPPER
 #include "libps6000a/ps6000aWrapper.h"
@@ -21,8 +22,7 @@ namespace py = pybind11;
 class dataCollectionConfig 
 {
 public:
-    ofstream ostream;
-    UNIT *unit;
+    UNIT unit;
     bitset<4> activeChannels;
     bitset<5> activeTriggers;
     bitset<4> timebase;
@@ -39,7 +39,7 @@ public:
     BOOL unitInitialised = FALSE;
 
     char serial[32];
-    dataCollectionConfig(UNIT *unit, char *serial)
+    dataCollectionConfig(UNIT unit, char *serial)
     {
         this->unit = unit;
         strcpy(this->serial, serial);
@@ -47,7 +47,7 @@ public:
 };
 
 UNIT g_unit;
-dataCollectionConfig g_dcc(&g_unit, (char*) "");
+dataCollectionConfig g_dcc(g_unit, (char*) "");
 vector<dataCollectionConfig> g_vecDcc;
 
 void setActiveChannels(dataCollectionConfig &dcc, 
@@ -73,7 +73,7 @@ void setActiveChannels(dataCollectionConfig &dcc,
                           chVoltage[2] * dcc.activeChannels.test(2) <<  4 |
                           chVoltage[3] * dcc.activeChannels.test(3);
 
-    SetVoltages(dcc.unit, chVoltage);
+    SetVoltages(&dcc.unit, chVoltage);
     return;
 }
 
@@ -100,7 +100,7 @@ void setTriggerConfig(dataCollectionConfig &dcc,
         {
             dcc.activeTriggers.set(i + 1);
             chTriggerThresholdADC.push_back(mv_to_adc(trigVoltageMv[i], 
-            dcc.unit->channelSettings[PICO_CHANNEL_A + i].range, dcc.unit));
+            dcc.unit.channelSettings[PICO_CHANNEL_A + i].range, &dcc.unit));
         }
         else
         {
@@ -110,7 +110,7 @@ void setTriggerConfig(dataCollectionConfig &dcc,
     if (trigVoltageMv[4] != 0)
     {
         dcc.activeTriggers.set(0);
-        dcc.auxTriggerThresholdADC = mv_to_adc(trigVoltageMv[4], PICO_X1_PROBE_1V, dcc.unit);
+        dcc.auxTriggerThresholdADC = mv_to_adc(trigVoltageMv[4], PICO_X1_PROBE_1V, &dcc.unit);
     }
     else
     {
@@ -118,7 +118,7 @@ void setTriggerConfig(dataCollectionConfig &dcc,
     }
 
     dcc.chTriggerThresholdADC = chTriggerThresholdADC;
-    SetTriggers(dcc.unit, dcc.activeTriggers, dcc.chTriggerThresholdADC, dcc.auxTriggerThresholdADC);
+    SetTriggers(&dcc.unit, dcc.activeTriggers, dcc.chTriggerThresholdADC, dcc.auxTriggerThresholdADC);
 
     return;
 }
@@ -136,7 +136,7 @@ void setDataConfig(dataCollectionConfig &dcc, uint8_t *timebase,
     dcc.maxPostSamples = *max_element(  dcc.chPostSamplesPerWaveform.begin(),
                                         dcc.chPostSamplesPerWaveform.end());
 
-    dcc.dataBuffers = SetDataBuffers(dcc.unit, dcc.activeChannels, dcc.chPostSamplesPerWaveform, 
+    dcc.dataBuffers = SetDataBuffers(&dcc.unit, dcc.activeChannels, dcc.chPostSamplesPerWaveform, 
             dcc.samplesPreTrigger, dcc.numWaveforms, dcc.maxPostSamples);
 
     return;
@@ -155,7 +155,7 @@ void freeDataBuffers(dataCollectionConfig &dcc)
 
 void resetDataBuffers(dataCollectionConfig &dcc)
 {
-    dcc.dataBuffers = SetDataBuffers(dcc.unit, dcc.activeChannels, dcc.chPostSamplesPerWaveform, 
+    dcc.dataBuffers = SetDataBuffers(&dcc.unit, dcc.activeChannels, dcc.chPostSamplesPerWaveform, 
             dcc.samplesPreTrigger, dcc.numWaveforms, dcc.maxPostSamples);
 }
 
@@ -163,7 +163,7 @@ void collectRapidBlockData(dataCollectionConfig &dcc)
 {
     uint16_t maxPostTrigger = *max_element( dcc.chPostSamplesPerWaveform.begin(),
                                             dcc.chPostSamplesPerWaveform.end());
-    StartRapidBlock(dcc.unit, dcc.samplesPreTrigger, maxPostTrigger, 
+    StartRapidBlock(&dcc.unit, dcc.samplesPreTrigger, maxPostTrigger, 
             dcc.timebase.to_ulong(), dcc.numWaveforms);
     return;
 }
@@ -189,7 +189,7 @@ void collectMultiRapidBlockData(vector<dataCollectionConfig> &vecDcc)
                 vecDcc.at(i).chPostSamplesPerWaveform.begin(),
                 vecDcc.at(i).chPostSamplesPerWaveform.end());
 
-        vecUnit.push_back(vecDcc.at(i).unit);
+        vecUnit.push_back(&vecDcc.at(i).unit);
         vecSamplesPreTrigger.push_back(vecDcc.at(i).samplesPreTrigger);
         vecMaxPostTrigger.push_back(maxPostTrigger);
         vecTimebase.push_back(vecDcc.at(i).timebase.to_ulong());
@@ -204,15 +204,15 @@ void collectMultiRapidBlockData(vector<dataCollectionConfig> &vecDcc)
             vecTimebase, vecNumWaveforms);
 }
 
-void setDataOutput(dataCollectionConfig &dcc, char *outputFileName)
+void setDataOutput(char *outputFileName, ofstream &of)
 {
-    dcc.ostream.open(outputFileName, ios::out | ios::binary);
+    of.open(outputFileName, ios::out | ios::binary);
     return;
 }
 
-void closeDataOutput(dataCollectionConfig &dcc)
+void closeDataOutput(ofstream &of)
 {
-    dcc.ostream.close();
+    of.close();
     return;
 }
 
@@ -261,28 +261,54 @@ void bitset_reverse(std::bitset<N> &b)
 char *concatTwoChar(char *line1, char *line2)
 {
     char *totalLine;
-    int len = asprintf(&totalLine, "%s_%s", line1, line2);
+    int len = asprintf(&totalLine, "%s%s", line1, line2);
     if (len < 0) abort();
     return totalLine;
 }
 
-void writeDataHeader(dataCollectionConfig &dcc)
+// Replaces '/' with '-' and adds '_' to the start
+char *formatSerial(char *serial)
 {
-    // Bit layout, in order
-    // 4 bits: timebase (from 0-4 for ps6000)
-    // 4 bits: ch1-4 active
-    // 3 bits: padding
-    // 5 bits: ch1-4, aux trigger active
-    // 16 bits: aux trigger threshold
-    // 64 (16*4) bits: trigger threshold (ch1-4)
-    // 16 (4*4): ch1-4 voltage ranges (aux is always +-1V range)
-    // 64 (4*16) bits: number of TOTAL samples per waveform (including pretrigger)
-    // 16 bits: number of samples before trigger
-    // 32 bits: number of waveforms
-    // 32 bits: unix timestamp (signed integer)
-    // total above bits: 232 (29 bytes)
-    // Flexible length, 0 terminated: model string
-    // Flexible length, 0 terminated: serial number
+    int max = 31;
+    char outputSerial[max];
+    strcpy(outputSerial, serial);
+
+    for (int i = 0; i < max; i++)
+    {
+        if (outputSerial[i] == '/')
+        {
+            outputSerial[i] = '-';
+        }
+    }
+
+    return concatTwoChar((char *) "_", outputSerial); 
+}
+
+char *createFileName(char *serial, char *outputFileBasename)
+{
+    char *formattedSerial = formatSerial(serial);
+    return concatTwoChar(concatTwoChar(outputFileBasename, formattedSerial), (char *) ".dat");
+}
+
+void writeDataHeader(dataCollectionConfig &dcc, ofstream &of)
+{
+    /*
+     * Bit layout, in order
+     * 4 bits: timebase (from 0-4 for ps6000)
+     * 4 bits: ch1-4 active
+     * 3 bits: padding
+     * 5 bits: ch1-4, aux trigger active
+     * 16 bits: aux trigger threshold
+     * 64 (16*4) bits: trigger threshold (ch1-4)
+     * 16 (4*4): ch1-4 voltage ranges (aux is always +-1V range)
+     * 64 (4*16) bits: number of TOTAL samples per waveform (including pretrigger)
+     * 16 bits: number of samples before trigger
+     * 32 bits: number of waveforms
+     * 32 bits: unix timestamp (signed integer)
+     * total above bits: 232 (29 bytes)
+     * Flexible length, 0 terminated: model string
+     * Flexible length, 0 terminated: serial number
+    */
 
     int16_t o16;
     uint16_t ou16;
@@ -294,58 +320,58 @@ void writeDataHeader(dataCollectionConfig &dcc)
 
     uint8_t timebaseActiveCh =  (uint8_t) dcc.timebase.to_ullong() << 4 |
                                 (uint8_t) dcc.activeChannels.to_ullong();
-    dcc.ostream.write((const char *) &timebaseActiveCh, sizeof(uint8_t));
+    of.write((const char *) &timebaseActiveCh, sizeof(uint8_t));
 
     uint8_t activeTriggers = (uint8_t) dcc.activeTriggers.to_ullong();
-    dcc.ostream.write((const char *) &activeTriggers, sizeof(uint8_t));
+    of.write((const char *) &activeTriggers, sizeof(uint8_t));
 
     bitset_reverse(dcc.activeChannels);
     bitset_reverse(dcc.activeTriggers);
 
     o16 = bswap16(dcc.auxTriggerThresholdADC);
-    dcc.ostream.write((const char *) &o16, sizeof(int16_t));
+    of.write((const char *) &o16, sizeof(int16_t));
 
     for (int i = 0; i < 4; i++)
     {
         o16 = bswap16(dcc.chTriggerThresholdADC.at(i));
-        dcc.ostream.write((const char *) &o16, sizeof(int16_t));
+        of.write((const char *) &o16, sizeof(int16_t));
     }
 
     o16 = bswap16((int16_t) dcc.chVoltageRanges.to_ullong());
-    dcc.ostream.write((const char *) &o16, sizeof(int16_t));
+    of.write((const char *) &o16, sizeof(int16_t));
 
     for (int i = 0; i < 4; i++)
     {
         ou16 = bswapu16(dcc.chPostSamplesPerWaveform.at(i) + dcc.samplesPreTrigger);
-        dcc.ostream.write((const char *) &ou16, sizeof(uint16_t));
+        of.write((const char *) &ou16, sizeof(uint16_t));
     }
 
     ou16 = bswapu16(dcc.samplesPreTrigger);
-    dcc.ostream.write((const char *) &ou16, sizeof(uint16_t));
+    of.write((const char *) &ou16, sizeof(uint16_t));
 
     o32 = bswap32(dcc.numWaveforms);
-    dcc.ostream.write((const char *) &o32, sizeof(int32_t));
+    of.write((const char *) &o32, sizeof(int32_t));
 
     time_t t = time(nullptr);
     o32 = bswap32((int32_t) t);
-    dcc.ostream.write((const char *) &o32, sizeof(int32_t));
+    of.write((const char *) &o32, sizeof(int32_t));
 
-    for (int i = 0; i < sizeof(dcc.unit->modelString); i++)
+    for (int i = 0; i < sizeof(dcc.unit.modelString); i++)
     {
-        dcc.ostream.write((const char *) &dcc.unit->modelString[i], 1L);
-        if (dcc.unit->modelString[i] == '\0') {break;}
+        of.write((const char *) &dcc.unit.modelString[i], 1L);
+        if (dcc.unit.modelString[i] == '\0') {break;}
     }
 
     for (int i = 0; i < sizeof(dcc.serial); i++)
     {
-        dcc.ostream.write((const char *) &dcc.serial[i], 1L);
-        if (dcc.unit->serial[i] == '\0') {break;}
+        of.write((const char *) &dcc.serial[i], 1L);
+        if (dcc.unit.serial[i] == '\0') {break;}
     }
 
     return;
 }
 
-void writeDataOut(dataCollectionConfig &dcc)
+void writeDataOut(dataCollectionConfig &dcc, ofstream &of)
 {
     uint16_t maxSamples = *max_element( dcc.chPostSamplesPerWaveform.begin(), 
                                         dcc.chPostSamplesPerWaveform.end());
@@ -362,7 +388,7 @@ void writeDataOut(dataCollectionConfig &dcc)
             for (int k = 0; k < nSamples; k++)
             {
                 o16 = bswap16((dcc.dataBuffers.at(i).at(j))[k]);
-                dcc.ostream.write((const char*) &o16, s);
+                of.write((const char*) &o16, s);
             }
         }
     }
@@ -371,7 +397,7 @@ void writeDataOut(dataCollectionConfig &dcc)
 int seriesInitDaq(char *serial)
 {
     if (serial == "") {serial = NULL;}
-    findUnit(g_dcc.unit, (int8_t*) serial);
+    findUnit(&g_dcc.unit, (int8_t*) serial);
     try
     {
         strcpy(g_dcc.serial, serial);
@@ -381,7 +407,7 @@ int seriesInitDaq(char *serial)
     {
         printf("Final Catch\n");
         printf("Caught: %s\n", e.what());
-        CloseDevice(g_dcc.unit);
+        CloseDevice(&g_dcc.unit);
         g_dcc.unitInitialised = FALSE;
         g_dcc.dataConfigured = FALSE;
         throw e;
@@ -414,7 +440,7 @@ int seriesSetDaqSettings(
     {
         printf("Final Catch\n");
         printf("Caught: %s\n", e.what());
-        CloseDevice(g_dcc.unit);
+        CloseDevice(&g_dcc.unit);
         g_dcc.unitInitialised = FALSE;
         g_dcc.dataConfigured = FALSE;
         throw e;
@@ -422,7 +448,7 @@ int seriesSetDaqSettings(
     return 1;
 }
 
-int seriesCollectData(char *outputFile)
+int seriesCollectData(char *outputFileBasename)
 {
     if ((g_dcc.unitInitialised == FALSE) || (g_dcc.dataConfigured = FALSE))
     {
@@ -431,10 +457,13 @@ int seriesCollectData(char *outputFile)
     try
     {
         collectRapidBlockData(g_dcc);
-        setDataOutput(g_dcc, outputFile);
-        writeDataHeader(g_dcc);
-        writeDataOut(g_dcc);
-        closeDataOutput(g_dcc);
+
+        ofstream of;
+        char *outputFile = concatTwoChar(outputFileBasename, (char *) ".dat");
+        setDataOutput(outputFile, of);
+        writeDataHeader(g_dcc, of);
+        writeDataOut(g_dcc, of);
+        closeDataOutput(of);
         printf("Written to file: %s\n", outputFile);
         resetDataBuffers(g_dcc);
         printf("Daq finished\n\n");
@@ -444,7 +473,7 @@ int seriesCollectData(char *outputFile)
     {
         printf("Final Catch\n");
         printf("Caught: %s\n", e.what());
-        CloseDevice(g_dcc.unit);
+        CloseDevice(&g_dcc.unit);
         g_dcc.unitInitialised = FALSE;
         g_dcc.dataConfigured = FALSE;
         throw e;
@@ -455,7 +484,7 @@ int seriesCloseDaq()
 {
     if (g_dcc.unitInitialised)
     {
-        CloseDevice(g_dcc.unit);
+        CloseDevice(&g_dcc.unit);
         g_dcc.unitInitialised = FALSE;
     }
     if (g_dcc.dataConfigured)
@@ -470,7 +499,7 @@ int multiSeriesInitDaq(char *serial)
 {
     for (int i = 0; i < g_vecDcc.size(); i++)
     {
-        if (0 == strcmp(serial, (char *) g_vecDcc.at(i).unit->serial))
+        if (0 == strcmp(serial, (char *) g_vecDcc.at(i).unit.serial))
         {
             printf("This unit is already intialised!!\n");
             return 0;
@@ -480,7 +509,7 @@ int multiSeriesInitDaq(char *serial)
     UNIT unit;
     findUnit(&unit, (int8_t*) serial);
 
-    dataCollectionConfig dcc(&unit, serial);
+    dataCollectionConfig dcc(unit, serial);
     dcc.unitInitialised = TRUE;
 
     g_vecDcc.push_back(dcc);
@@ -500,15 +529,20 @@ int multiSeriesSetDaqSettings(
     {
         if (g_vecDcc.at(i).unitInitialised == FALSE)
         {
-            printf("Unit uninitialised in multiDcc");
+            printf("Unit uninitialised in multiDcc\n");
             return 0;
         }
         setActiveChannels(g_vecDcc.at(i), chAVRange, chBVRange, chCVRange, chDVRange);
+        printf("%s: Active channel(s) configured\n", g_vecDcc.at(i).serial);
         setTriggerConfig(g_vecDcc.at(i), chATrigger, chBTrigger, chCTrigger, chDTrigger, auxTrigger);
+        printf("%s: Trigger channel(s) configured\n", g_vecDcc.at(i).serial);
         setDataConfig(g_vecDcc.at(i), &timebase, &numWaveforms, &samplesPreTrigger, 
                 &chAWfSamples, &chBWfSamples, &chCWfSamples, &chDWfSamples);
         g_vecDcc.at(i).dataConfigured = TRUE;
+        printf("%s: Settings configured\n\n", g_vecDcc.at(i).serial);
     }
+
+    return 1;
 }
 
 int multiSeriesCollectData(char *outputFileBasename)
@@ -518,23 +552,35 @@ int multiSeriesCollectData(char *outputFileBasename)
     // Will need to replace with a - or something
     // Need to add functions to daq6ka and ps6kawrapper to accommodate this
 
+    bool anyActive = FALSE;
+
     for (int i = 0; i < g_vecDcc.size(); i++)
     {
-        if ((g_dcc.unitInitialised == FALSE) || (g_dcc.dataConfigured = FALSE))
+        if (g_vecDcc.at(i).unitInitialised && g_vecDcc.at(i).dataConfigured)
         {
-            return 0;
+            anyActive = TRUE;
         }
     }
+    if (!anyActive)
+    {
+        return 0;
+    }
+
     collectMultiRapidBlockData(g_vecDcc);
     for (int i = 0; i < g_vecDcc.size(); i++)
     {
-        char *outputFile = concatTwoChar(outputFileBasename, g_vecDcc.at(i).serial);
-        setDataOutput(g_dcc, outputFile);
-        writeDataHeader(g_dcc);
-        writeDataOut(g_dcc);
-        closeDataOutput(g_dcc);
+        if (g_dcc.unitInitialised || g_dcc.dataConfigured)
+        {
+            
+        }
+        ofstream of;
+        char *outputFile = createFileName(g_vecDcc.at(i).serial, outputFileBasename);
+        setDataOutput(outputFile, of);
+        writeDataHeader(g_vecDcc.at(i), of);
+        writeDataOut(g_vecDcc.at(i), of);
+        closeDataOutput(of);
         printf("Written to file: %s\n", outputFile);
-        resetDataBuffers(g_dcc);
+        resetDataBuffers(g_vecDcc.at(i));
     }
     printf("Daq finished\n\n");
     return 1;
@@ -546,12 +592,12 @@ int multiSeriesCloseDaq()
     {
         if (g_vecDcc.at(i).unitInitialised)
         {
-            CloseDevice(g_dcc.unit);
+            CloseDevice(&g_vecDcc.at(i).unit);
             g_vecDcc.at(i).unitInitialised = FALSE;
         }
         if (g_vecDcc.at(i).dataConfigured)
         {
-            freeDataBuffers(g_dcc);
+            freeDataBuffers(g_vecDcc.at(i));
             g_vecDcc.at(i).dataConfigured = FALSE;
         }
     }
@@ -559,7 +605,7 @@ int multiSeriesCloseDaq()
 }
 
 // to be run from python side
-int runFullDAQ(char *outputFile,
+int runFullDAQ(char *outputFileBasename,
             int16_t chATrigger, int16_t chAVRange, uint16_t chAWfSamples,
             int16_t chBTrigger, int16_t chBVRange, uint16_t chBWfSamples,
             int16_t chCTrigger, int16_t chCVRange, uint16_t chCWfSamples,
@@ -572,17 +618,19 @@ int runFullDAQ(char *outputFile,
     findUnit(unit, (int8_t*) serial);
     try
     {
-        dataCollectionConfig dcc(unit, serial);
+        dataCollectionConfig dcc(*unit, serial);
         setActiveChannels(dcc, chAVRange, chBVRange, chCVRange, chDVRange);
         setTriggerConfig(dcc, chATrigger, chBTrigger, chCTrigger, chDTrigger, auxTrigger);
         setDataConfig(dcc, &timebase, &numWaveforms, &samplesPreTrigger, 
                     &chAWfSamples, &chBWfSamples, &chCWfSamples, &chDWfSamples);
 
         collectRapidBlockData(dcc);
-        setDataOutput(dcc, outputFile);
-        writeDataHeader(dcc);
-        writeDataOut(dcc);
-        closeDataOutput(dcc);
+        ofstream of;
+        char *outputFile = concatTwoChar(outputFileBasename, (char *) ".dat");
+        setDataOutput(outputFile, of);
+        writeDataHeader(dcc, of);
+        writeDataOut(dcc, of);
+        closeDataOutput(of);
         printf("Data written to %s\n", outputFile);
         freeDataBuffers(dcc);
         CloseDevice(unit);
@@ -619,6 +667,10 @@ PYBIND11_MODULE(daq6000a, m)
     m.def("seriesSetDaqSettings", &seriesSetDaqSettings, py::return_value_policy::copy);
     m.def("seriesCollectData", &seriesCollectData, py::return_value_policy::copy);
     m.def("seriesCloseDaq", &seriesCloseDaq, py::return_value_policy::copy);
+    m.def("multiSeriesInitDaq", &multiSeriesInitDaq, py::return_value_policy::copy);
+    m.def("multiSeriesSetDaqSettings", &multiSeriesSetDaqSettings, py::return_value_policy::copy);
+    m.def("multiSeriesCollectData", &multiSeriesCollectData, py::return_value_policy::copy);
+    m.def("multiSeriesCloseDaq", &multiSeriesCloseDaq, py::return_value_policy::copy);
     m.def("getSerials", &getSerials, py::return_value_policy::copy);
 }
 

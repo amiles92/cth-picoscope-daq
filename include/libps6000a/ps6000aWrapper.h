@@ -105,4 +105,6 @@ void enumUnits(int16_t *count, char* outSerials, int16_t *serialLth);
 
 void PREF4 CallBackBlock(int16_t handle, PICO_STATUS status, void * pParameter);
 
+void PREF4 MultiCallBackBlock(int16_t handle, PICO_STATUS status, void *pParameter);
+
 int16_t mv_to_adc(int16_t mv, int16_t rangeIndex, UNIT *unit);

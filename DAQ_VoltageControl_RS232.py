@@ -407,7 +407,7 @@ while(EndFlag==0):
                 else:           
                     try:
                         print("Input name for the DAQ output file:")
-                        DAQ_outFile = r"./data/"+str(input())+".dat"
+                        DAQ_outFile = r"./data/"+str(input())
                         print("DAQ output file:", DAQ_outFile) 
                         daq.seriesCollectData(DAQ_outFile)
                     except:
