@@ -192,15 +192,16 @@ CompFlag=0 #Error flag
 DAQ_Init = str(args[6])
 DAQ_ParamsLoaded = 0
 DAQ_End = 0
-picoscopes = ['IW098/0028']
+picoscopes = ['IW098/0028','IW114/0004']
 if (DAQ_Init == "1"):
-    print("Picoscope:", picoscopes)
-    status = 0
-    status = daq.seriesInitDaq(picoscopes[0])
-    if status == 0:
-        print("Python - DAQ device not opened correctly")
-        print(status)
-else: 
+    for ps in picoscopes:
+        print("Picoscope:", ps)
+        status = 0
+        status = daq.multiSeriesInitDaq(ps)
+        if status == 0:
+            print("Python - DAQ device not opened correctly: ",ps)
+            print(status)
+else:
     print("DAQ not initialized at launch because of arg [6]")
     DAQ_End = 1
 while(EndFlag==0):
@@ -311,7 +312,7 @@ while(EndFlag==0):
                         if (len(int_DAQ_args)!=16):
                             print(int_DAQ_args, "is not a valid input")
                         else:
-                            daq.seriesSetDaqSettings(*int_DAQ_args)
+                            daq.multiSeriesSetDaqSettings(*int_DAQ_args)
                             DAQ_ParamsLoaded=1
                     except:
                         print("Input is not valid")
@@ -372,7 +373,7 @@ while(EndFlag==0):
                     try:
                         DAQ_setup = str(input())
                         if (DAQ_setup == "1"):
-                            daq.seriesSetDaqSettings(
+                            daq.multiSeriesSetDaqSettings(
                                 0, 2, 1000,
                                 0, 2, 1000,
                                 0, 2, 1000,
@@ -380,7 +381,7 @@ while(EndFlag==0):
                                 100, 2, 50000, 0)
                             DAQ_ParamsLoaded=1
                         elif (DAQ_setup == "2"):
-                            daq.seriesSetDaqSettings(
+                            daq.multiSeriesSetDaqSettings(
                                 0, 2, 1000,
                                 0, 99, 0,
                                 0, 2, 1000,
@@ -388,7 +389,7 @@ while(EndFlag==0):
                                 100, 1, 50000, 0)
                             DAQ_ParamsLoaded=1
                         elif (DAQ_setup == "3"):
-                            daq.seriesSetDaqSettings(
+                            daq.multiSeriesSetDaqSettings(
                                 0, 2, 1200,
                                 0, 99, 0,
                                 0, 99, 0,
@@ -398,7 +399,7 @@ while(EndFlag==0):
                         elif (DAQ_setup == "4"):
                             print("This setup has an error that I haven't fixed, please choose another setup")
                             continue
-                            daq.seriesSetDaqSettings(
+                            daq.multiSeriesSetDaqSettings(
                                 0, 2, 1000,
                                 0, 2, 1000,
                                 0, 2, 1000,
@@ -406,7 +407,7 @@ while(EndFlag==0):
                                 100, 2, 50000, 0)
                             DAQ_ParamsLoaded=1
                         elif (DAQ_setup == "5"):
-                            daq.seriesSetDaqSettings(
+                            daq.multiSeriesSetDaqSettings(
                                 0, 2, 3000,
                                 0, 2, 3000,
                                 0, 2, 3000,
@@ -438,7 +439,7 @@ while(EndFlag==0):
                         print("Input name for the DAQ output file:")
                         DAQ_outFile = r"./data/"+str(input())
                         print("DAQ output file:", DAQ_outFile) 
-                        daq.seriesCollectData(DAQ_outFile)
+                        daq.multiSeriesCollectData(DAQ_outFile)
                     except:
                         print("An error occured during DAQ.")
                         CommandFlag=1
@@ -455,16 +456,17 @@ while(EndFlag==0):
                     DAQ_End = 1 
                     DAQ_ParamsLoaded = 0
                     DAQ_Init = "0"
-                    daq.seriesCloseDaq()
+                    daq.multiSeriesCloseDaq()
                     print("DAQ stopped.")
 
             elif(VComm=="ResetDAQ"):
                 if (DAQ_End == 1):
-                    status = 0
-                    status = daq.seriesInitDaq(picoscopes[0])
-                    if status == 0:
-                        print("Python - DAQ device not opened correctly")
-                        print(status)
+                    for ps in picoscopes:
+                        status = 0
+                        status = daq.multiSeriesInitDaq(ps)
+                        if status == 0:
+                            print("Python - DAQ device not opened correctly:",ps)
+                            print(status)
                     DAQ_End = 0
                     DAQ_Init = "1"
                 else:
@@ -504,7 +506,7 @@ while(EndFlag==0):
         print("==============================================================================")
 
 ###################################Safely Ramp Down (if not 0 V)############################################
-if(DAQ_End==0): daq.seriesCloseDaq()
+if(DAQ_End==0): daq.multiSeriesCloseDaq()
 VoltageRead = ReadVoltage(instrument)
 if(CompFlag==1): VoltageRead=CurrentVoltage #if an error code is being read, cant use the readout to ramp down so use what it should have been to start ramping down   
 if(VoltageRead>0.0):ZeroVoltage(VoltageRead,instrument)
