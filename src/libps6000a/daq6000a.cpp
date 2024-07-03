@@ -31,7 +31,7 @@ public:
     int16_t auxTriggerThresholdADC;
     vector<uint16_t> chPostSamplesPerWaveform; // NOTE: Excludes pre trigger samples
     uint16_t maxPostSamples;
-    uint16_t samplesPreTrigger;
+    int16_t samplesPreTrigger;
     uint32_t numWaveforms;
     vector<vector<int16_t*>> dataBuffers;
 
@@ -43,6 +43,29 @@ public:
     {
         this->unit = unit;
         strcpy(this->serial, serial);
+    }
+    void print()
+    {
+        printf("Data Collection Config Info:\n");
+        printf("Serial Number: %s\n", this->serial);
+        printf("Active Channels: %u\n", (uint) this->activeChannels.to_ulong());
+        printf("Active Triggers: %u\n", (uint) this->activeTriggers.to_ulong());
+        printf("Timebase: %u\n", (uint) this->timebase.to_ulong());
+        printf("Channel V Ranges: %u\n", (uint) this->chVoltageRanges.to_ulong());
+        for (int i = 0; i < this->chTriggerThresholdADC.size(); i++)
+        {
+            printf("%c Trigger Threshold: %i\n", 'A' + i, this->chTriggerThresholdADC.at(i));
+        }
+        printf("Aux Trigger Threshold: %i\n", this->auxTriggerThresholdADC);
+        for (int i = 0; i < this->chPostSamplesPerWaveform.size(); i++)
+        {
+            printf("%c Post Trigger Samples: %i\n", 'A' + i, this->chPostSamplesPerWaveform.at(i));
+        }
+        printf("Max Post Trigger Samples: %i\n", this->maxPostSamples);
+        printf("Samples Pre Trigger: %i\n", this->samplesPreTrigger);
+        printf("Number of Waveforms: %i\n", this->numWaveforms);
+        printf("Data Configured: %s\n", this->dataConfigured ? "true" : "false");
+        printf("Unit Initialised: %s\n\n", this->unitInitialised ? "true" : "false");
     }
 };
 
@@ -94,12 +117,10 @@ void setTriggerConfig(dataCollectionConfig &dcc,
                       int16_t auxTrigVoltageMv)
 {
 
-    int16_t trigVoltageMv[5] = {aTrigVoltageMv,
+    int16_t trigVoltageMv[4] = {aTrigVoltageMv,
                                 bTrigVoltageMv,
                                 cTrigVoltageMv,
-                                dTrigVoltageMv,
-                                auxTrigVoltageMv
-                                };
+                                dTrigVoltageMv};
 
     vector<int16_t> chTriggerThresholdADC;
 
@@ -116,10 +137,10 @@ void setTriggerConfig(dataCollectionConfig &dcc,
             chTriggerThresholdADC.push_back(0);
         }
     }
-    if (trigVoltageMv[4] != 0)
+    if (auxTrigVoltageMv != 0)
     {
         dcc.activeTriggers.set(0);
-        dcc.auxTriggerThresholdADC = mv_to_adc(trigVoltageMv[4], PICO_X1_PROBE_1V, &dcc.unit);
+        dcc.auxTriggerThresholdADC = mv_to_adc(auxTrigVoltageMv, PICO_X1_PROBE_1V, &dcc.unit);
     }
     else
     {
@@ -132,18 +153,24 @@ void setTriggerConfig(dataCollectionConfig &dcc,
     return;
 }
 
-void setDataConfig(dataCollectionConfig &dcc, uint8_t *timebase,
-    uint32_t *numWaveforms, uint16_t *samplesPreTrigger, uint16_t *chAWfSamples,
-    uint16_t *chBWfSamples , uint16_t *chCWfSamples , uint16_t *chDWfSamples)
+void setDataConfig(dataCollectionConfig &dcc, uint8_t timebase,
+    uint32_t numWaveforms, int16_t samplesPreTrigger, uint16_t chAWfSamples,
+    uint16_t chBWfSamples , uint16_t chCWfSamples , uint16_t chDWfSamples)
 {
-    dcc.timebase = *timebase;
-    dcc.numWaveforms = *numWaveforms;
-    dcc.samplesPreTrigger = *samplesPreTrigger;
+    dcc.timebase = timebase;
+    dcc.numWaveforms = numWaveforms;
+    dcc.samplesPreTrigger = samplesPreTrigger;
 
-    vector<uint16_t> samplesPostPerWaveform = {*chAWfSamples, *chBWfSamples, *chCWfSamples, *chDWfSamples};
+    vector<uint16_t> samplesPostPerWaveform = {chAWfSamples, chBWfSamples, chCWfSamples, chDWfSamples};
     dcc.chPostSamplesPerWaveform = samplesPostPerWaveform;
     dcc.maxPostSamples = *max_element(  dcc.chPostSamplesPerWaveform.begin(),
                                         dcc.chPostSamplesPerWaveform.end());
+
+    if (dcc.samplesPreTrigger < 0)
+    {
+        printf("Setting post-trigger delay of %i samples\n", -1 * dcc.samplesPreTrigger);
+        SetDaqDelay(&dcc.unit, dcc.samplesPreTrigger);
+    }
 
     dcc.dataBuffers = SetDataBuffers(&dcc.unit, dcc.activeChannels, dcc.chPostSamplesPerWaveform, 
             dcc.samplesPreTrigger, dcc.numWaveforms, dcc.maxPostSamples);
@@ -181,7 +208,7 @@ void collectMultiRapidBlockData(vector<dataCollectionConfig> &vecDcc)
 {
     int32_t vecLength = vecDcc.size();
     vector<UNIT *> vecUnit;
-    vector<uint16_t> vecSamplesPreTrigger;
+    vector<int16_t> vecSamplesPreTrigger;
     vector<uint16_t> vecMaxPostTrigger;
     vector<uint8_t> vecTimebase;
     vector<uint32_t> vecNumWaveforms;
@@ -348,8 +375,8 @@ void writeDataHeader(dataCollectionConfig &dcc, ofstream &of)
         of.write((const char *) &ou16, sizeof(uint16_t));
     }
 
-    ou16 = bswapu16(dcc.samplesPreTrigger);
-    of.write((const char *) &ou16, sizeof(uint16_t));
+    o16 = bswap16(dcc.samplesPreTrigger);
+    of.write((const char *) &o16, sizeof(int16_t));
 
     o32 = bswap32(dcc.numWaveforms);
     of.write((const char *) &o32, sizeof(int32_t));
@@ -423,7 +450,7 @@ int seriesSetDaqSettings(
             int16_t chCTrigger, int16_t chCVRange, uint16_t chCWfSamples,
             int16_t chDTrigger, int16_t chDVRange, uint16_t chDWfSamples,
             int16_t auxTrigger, uint8_t timebase,
-            uint32_t numWaveforms, uint16_t samplesPreTrigger)
+            uint32_t numWaveforms, int16_t samplesPreTrigger)
 {
     if (g_dcc.unitInitialised == FALSE)
     {
@@ -435,8 +462,8 @@ int seriesSetDaqSettings(
         printf("Active channels set\n");
         setTriggerConfig(g_dcc, chATrigger, chBTrigger, chCTrigger, chDTrigger, auxTrigger);
         printf("Trigger channels set\n");
-        setDataConfig(g_dcc, &timebase, &numWaveforms, &samplesPreTrigger, 
-                &chAWfSamples, &chBWfSamples, &chCWfSamples, &chDWfSamples);
+        setDataConfig(g_dcc, timebase, numWaveforms, samplesPreTrigger, 
+                chAWfSamples, chBWfSamples, chCWfSamples, chDWfSamples);
         printf("All settings configured\n\n");
         g_dcc.dataConfigured = TRUE;
         printf("Data settings updated\n");
@@ -528,23 +555,49 @@ int multiSeriesSetDaqSettings(
             int16_t chCTrigger, int16_t chCVRange, uint16_t chCWfSamples,
             int16_t chDTrigger, int16_t chDVRange, uint16_t chDWfSamples,
             int16_t auxTrigger, uint8_t timebase,
-            uint32_t numWaveforms, uint16_t samplesPreTrigger)
+            uint32_t numWaveforms, int16_t samplesPreTrigger)
 {
     for (int i = 0; i < g_vecDcc.size(); i++)
     {
-        if (g_vecDcc.at(i).unitInitialised == FALSE)
-        {
-            printf("Unit uninitialised in multiDcc\n");
-            return 0;
+        try {
+            if (g_vecDcc.at(i).unitInitialised == FALSE)
+            {
+                printf("Unit uninitialised in multiDcc\n");
+                return 0;
+            }
+            setActiveChannels(g_vecDcc.at(i), chAVRange, chBVRange, chCVRange, chDVRange);
+            printf("%s: Active channel(s) configured\n", g_vecDcc.at(i).serial);
+            setTriggerConfig(g_vecDcc.at(i), chATrigger, chBTrigger, chCTrigger, chDTrigger, auxTrigger);
+            printf("%s: Trigger channel(s) configured\n", g_vecDcc.at(i).serial);
+            setDataConfig(g_vecDcc.at(i), timebase, numWaveforms, samplesPreTrigger, 
+                    chAWfSamples, chBWfSamples, chCWfSamples, chDWfSamples);
+            g_vecDcc.at(i).dataConfigured = TRUE;
+            printf("%s: Settings configured\n\n", g_vecDcc.at(i).serial);
+
         }
-        setActiveChannels(g_vecDcc.at(i), chAVRange, chBVRange, chCVRange, chDVRange);
-        printf("%s: Active channel(s) configured\n", g_vecDcc.at(i).serial);
-        setTriggerConfig(g_vecDcc.at(i), chATrigger, chBTrigger, chCTrigger, chDTrigger, auxTrigger);
-        printf("%s: Trigger channel(s) configured\n", g_vecDcc.at(i).serial);
-        setDataConfig(g_vecDcc.at(i), &timebase, &numWaveforms, &samplesPreTrigger, 
-                &chAWfSamples, &chBWfSamples, &chCWfSamples, &chDWfSamples);
-        g_vecDcc.at(i).dataConfigured = TRUE;
-        printf("%s: Settings configured\n\n", g_vecDcc.at(i).serial);
+        catch (exception e)
+        {
+            printf("Final Catch\n");
+            printf("Caught: %s\n", e.what());
+            CloseDevice(&g_vecDcc.at(i).unit);
+            g_vecDcc.at(i).unitInitialised = FALSE;
+            g_vecDcc.at(i).dataConfigured = FALSE;
+            // throw e;
+        }
+    }
+
+    bool anyActive = FALSE;
+
+    for (int i = 0; i < g_vecDcc.size(); i++)
+    {
+        if (g_vecDcc.at(i).unitInitialised && g_vecDcc.at(i).dataConfigured)
+        {
+            anyActive = TRUE;
+        }
+    }
+    if (!anyActive)
+    {
+        return 0;
     }
 
     return 1;
@@ -574,7 +627,7 @@ int multiSeriesCollectData(char *outputFileBasename)
     collectMultiRapidBlockData(g_vecDcc);
     for (int i = 0; i < g_vecDcc.size(); i++)
     {
-        if (g_dcc.unitInitialised || g_dcc.dataConfigured)
+        if (!(g_dcc.unitInitialised && g_dcc.dataConfigured))
         {
             
         }
@@ -616,7 +669,7 @@ int runFullDAQ(char *outputFileBasename,
             int16_t chCTrigger, int16_t chCVRange, uint16_t chCWfSamples,
             int16_t chDTrigger, int16_t chDVRange, uint16_t chDWfSamples,
             int16_t auxTrigger, uint8_t timebase,
-            uint32_t numWaveforms, uint16_t samplesPreTrigger, char *serial)
+            uint32_t numWaveforms, int16_t samplesPreTrigger, char *serial)
 {
     UNIT *unit;
     if (serial == "") {serial = NULL;}
@@ -626,8 +679,8 @@ int runFullDAQ(char *outputFileBasename,
         dataCollectionConfig dcc(*unit, serial);
         setActiveChannels(dcc, chAVRange, chBVRange, chCVRange, chDVRange);
         setTriggerConfig(dcc, chATrigger, chBTrigger, chCTrigger, chDTrigger, auxTrigger);
-        setDataConfig(dcc, &timebase, &numWaveforms, &samplesPreTrigger, 
-                    &chAWfSamples, &chBWfSamples, &chCWfSamples, &chDWfSamples);
+        setDataConfig(dcc, timebase, numWaveforms, samplesPreTrigger, 
+                    chAWfSamples, chBWfSamples, chCWfSamples, chDWfSamples);
 
         collectRapidBlockData(dcc);
 

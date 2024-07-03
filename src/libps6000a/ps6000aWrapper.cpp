@@ -196,7 +196,7 @@ void SetTimebase(UNIT *unit, uint8_t timebase, uint16_t maxChSamples) // Don't n
 }
 
 vector<vector<int16_t*>> SetDataBuffers(UNIT *unit, bitset<4> activeChannels, 
-	vector<uint16_t> samplesPostPerChannel, uint16_t samplesPreTrigger, 
+	vector<uint16_t> samplesPostPerChannel, int16_t samplesPreTrigger, 
 	uint32_t numWaveforms, uint16_t maxPostSamples)
 {//Using rapid block mode only for now
 	vector<vector<int16_t*>> outBuffers(activeChannels.count());
@@ -226,6 +226,12 @@ vector<vector<int16_t*>> SetDataBuffers(UNIT *unit, bitset<4> activeChannels,
 	{
 		if (!activeChannels.test(i)) {continue;}
 
+		if ((samplesPreTrigger + (int) samplesPostPerChannel.at(i)) <= 0)
+		{
+			printf("The total number of samples for channel %c is negative!!!\n", 'A' + i);
+			throw runtime_error("Negative total samples");
+		}
+
 		uint32_t chSamples = samplesPreTrigger + samplesPostPerChannel.at(i);
 		outBuffers.at(activeCh) = vector<int16_t*>(numWaveforms);
 
@@ -248,7 +254,7 @@ vector<vector<int16_t*>> SetDataBuffers(UNIT *unit, bitset<4> activeChannels,
 	return outBuffers;
 }
 
-void SetSimpleTriggerSettings(UNIT *unit, int16_t threshold, 
+void SetSimpleChannelTrigger(UNIT *unit, int16_t threshold, 
 		PICO_THRESHOLD_DIRECTION dir, PICO_CHANNEL ch)
 {
 	disableTrigger(unit);
@@ -257,9 +263,55 @@ void SetSimpleTriggerSettings(UNIT *unit, int16_t threshold,
 	return;
 }
 
+void SetSimpleAuxTrigger(UNIT *unit)
+{
+	PICO_ACTION						action;
+	PICO_CONDITION 					condition;
+	PICO_DIRECTION 					direction;
+	PICO_TRIGGER_CHANNEL_PROPERTIES properties;
+	PICO_STATUS 					status;
+
+	action = (PICO_ACTION) (PICO_CLEAR_ALL | PICO_ADD);
+
+	condition.source = PICO_TRIGGER_AUX;
+	condition.condition = PICO_CONDITION_TRUE;
+
+	direction.channel = PICO_TRIGGER_AUX;
+	direction.direction = PICO_RISING;
+	direction.thresholdMode = PICO_LEVEL;
+
+	properties.thresholdUpper = 0;
+	properties.thresholdUpperHysteresis = 0;
+	properties.thresholdLower = 0;
+	properties.thresholdLowerHysteresis = 0;
+	properties.channel = PICO_TRIGGER_AUX;
+
+	status = ps6000aSetTriggerChannelConditions(unit->handle, &condition, 1, action);
+	status = ps6000aSetTriggerChannelDirections(unit->handle, &direction, 1);
+	status = ps6000aSetTriggerChannelProperties(unit->handle, &properties, 1, 0, 0);
+}
+
 void disableTrigger(UNIT *unit)
 {
 	ps6000aSetSimpleTrigger(unit->handle, 0, PICO_CHANNEL_A, 0, PICO_RISING, 0, 0);
+	return;
+}
+
+void SetDaqDelay(UNIT *unit, int16_t delay)
+{
+	assert(delay < 0);
+
+	PICO_STATUS status;
+	uint64_t u_delay = delay * -1;
+
+	printf("u_delay: %i\n", (int) u_delay);
+
+	status = ps6000aSetTriggerDelay(unit->handle, u_delay);
+	printf("Status from set delay: %x\n", status);
+	if (status != PICO_OK)
+	{
+		throw runtime_error("Delay failed");
+	}
 	return;
 }
 
@@ -291,15 +343,16 @@ void SetTriggers(UNIT *unit, bitset<5> triggers, vector<int16_t> chThreshold, in
 		{
 			if (triggers.test(i + 1))
 			{
-				SetSimpleTriggerSettings(unit, chThreshold.at(i), (PICO_THRESHOLD_DIRECTION)
+				printf("Setting channel trigger\n");
+				SetSimpleChannelTrigger(unit, chThreshold.at(i), (PICO_THRESHOLD_DIRECTION)
 					((chThreshold.at(i) >= 0) ? PICO_RISING : PICO_FALLING), (PICO_CHANNEL) (PICO_CHANNEL_A + i));
 				break;
 			}
 		}
 		if (triggers.test(0))
 		{
-			SetSimpleTriggerSettings(unit, auxThreshold, (PICO_THRESHOLD_DIRECTION)
-					((auxThreshold >= 0) ? PICO_RISING : PICO_FALLING), (PICO_CHANNEL) (PICO_TRIGGER_AUX));
+			printf("Setting aux trigger\n");
+			SetSimpleAuxTrigger(unit);
 		}
 	}
 	else
@@ -347,14 +400,14 @@ int32_t _kbhit()
         return bytesWaiting;
 }
 
-void StartRapidBlock(UNIT *unit, uint16_t preTrigger, uint16_t postTriggerMax,
+void StartRapidBlock(UNIT *unit, int16_t preTrigger, uint16_t postTriggerMax,
 	uint8_t timebase, uint32_t numWaveforms)
 {
 	PICO_STATUS status;
 	double timeIndisposed;
 	uint64_t nCompletedCaptures;
 	uint32_t timebase32 = timebase;
-	uint64_t preTrigger64 = preTrigger;
+	int64_t preTrigger64 = max((int16_t) 0, preTrigger);
 	uint64_t postTriggerMax64 = postTriggerMax;
 
 	printf("\n\nStarting DAQ\n\n");
@@ -411,7 +464,7 @@ void StartRapidBlock(UNIT *unit, uint16_t preTrigger, uint16_t postTriggerMax,
 	return;
 }
 
-void StartMultiRapidBlock(vector<UNIT *> vecUnit, vector<uint16_t> vecPreTrigger,
+void StartMultiRapidBlock(vector<UNIT *> vecUnit, vector<int16_t> vecPreTrigger,
 	vector<uint16_t> vecPostTriggerMax, vector<uint8_t> vecTimebase,
 	vector<uint32_t> vecNumWaveforms)
 {
@@ -420,7 +473,7 @@ void StartMultiRapidBlock(vector<UNIT *> vecUnit, vector<uint16_t> vecPreTrigger
 	vector<double> vecTimeIndisposed(len);
 	vector<uint64_t> vecNCompletedCaptures(len);
 	vector<uint32_t> vecTimebase32(len);
-	vector<uint64_t> vecPreTrigger64(len);
+	vector<int64_t> vecPreTrigger64(len);
 	vector<uint64_t> vecPostTriggerMax64(len);
 
 	g_multiReady = 0;
@@ -428,7 +481,7 @@ void StartMultiRapidBlock(vector<UNIT *> vecUnit, vector<uint16_t> vecPreTrigger
 	for (int i = 0; i < len; i++)
 	{
 		vecTimebase32.at(i) = vecTimebase.at(i);
-		vecPreTrigger64.at(i) = vecPreTrigger.at(i);
+		vecPreTrigger64.at(i) = max((int16_t) 0, vecPreTrigger.at(i));
 		vecPostTriggerMax64.at(i) = vecPostTriggerMax.at(i);
 	}
 
@@ -496,6 +549,8 @@ void StartMultiRapidBlock(vector<UNIT *> vecUnit, vector<uint16_t> vecPreTrigger
 PICO_STATUS OpenDevice(UNIT *unit, int8_t *serial)
 {
 	PICO_STATUS status;
+	int16_t minADCValue = 0;
+	int16_t maxADCValue = 0;
 
 	if (serial == NULL)
 	{
@@ -503,9 +558,14 @@ PICO_STATUS OpenDevice(UNIT *unit, int8_t *serial)
 	}
 	else
 	{
-		status = ps6000aOpenUnit(&(unit->handle), serial, PICO_DR_8BIT);
+		status = ps6000aOpenUnit(&unit->handle, serial, PICO_DR_8BIT);
 	}
 
+	ps6000aGetAdcLimits(unit->handle, PICO_DR_8BIT, &minADCValue, &maxADCValue);
+
+	disableTrigger(unit);
+
+	unit->maxADCValue = maxADCValue;
 	unit->openStatus = status;
 	unit->complete = 1;
 
@@ -640,6 +700,7 @@ void PREF4 MultiCallBackBlock(int16_t handle, PICO_STATUS status, void *pParamet
 	intptr_t runId = (intptr_t) pParameter;
 	if (status != PICO_CANCELLED)
 	{
+		printf("Run %i has finished\n", (int) runId);
 		g_multiReady |= 1 << runId;
 	}
 }
