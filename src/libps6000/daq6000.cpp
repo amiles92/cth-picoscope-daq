@@ -477,6 +477,14 @@ char* getSerials()
     return out;
 }
 
+int runFunctionGenerator(uint32_t PeakValue, double Width)
+{
+    UNIT *unit = new UNIT();
+    findUnit(unit, (int8_t*) "GO024/040");
+    PicoSquarePulseGen(unit, PeakValue, Width );
+    return 1;
+}
+
 PYBIND11_MODULE(daq6000, m)
 {
     m.doc() = "Picoscope 6000 DAQ System";
@@ -487,5 +495,6 @@ PYBIND11_MODULE(daq6000, m)
     m.def("seriesCollectData", &seriesCollectData, py::return_value_policy::copy);
     m.def("seriesCloseDaq", &seriesCloseDaq, py::return_value_policy::copy);
     m.def("getSerials", &getSerials, py::return_value_policy::copy);
+    m.def("runFunctionGenerator", &runFunctionGenerator, py::return_value_policy::copy);
 }
 

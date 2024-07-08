@@ -149,3 +149,6 @@ void PREF4 CallBackBlock(int16_t handle, PICO_STATUS status, void * pParameter);
 *  (useful for setting trigger thresholds)
 ****************************************************************************/
 int16_t mv_to_adc(int16_t mv, int16_t ch);
+
+void PicoSquarePulseGen(UNIT *unit, uint32_t PeakValue, double Width);
+
