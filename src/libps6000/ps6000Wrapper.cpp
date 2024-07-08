@@ -818,3 +818,47 @@ int16_t mv_to_adc(int16_t mv, int16_t ch)
 {
 	return (mv * PS6000_MAX_VALUE) / inputRanges[ch];
 }
+
+void PicoSquarePulseGen(UNIT *unit, uint32_t PeakValue, double Width)
+{
+	PeakValue=PeakValue*1e3;
+	Width=Width*1e-9;
+	double Frequency = 1.0/(2*Width);
+	if ((Frequency<=20000000)&&(PeakValue<=2000000))
+	{
+		PICO_STATUS ps = ps6000SetSigGenBuiltInV2(
+			unit->handle, // Handle
+			0,  // Voltage offset
+			PeakValue*2,	 // PkToPk voltage
+			PS6000_SQUARE, // Squarewave signal
+			Frequency, // StartFrequency
+			Frequency, // StopFrequency (sweep)
+			0, // Sweep Increment
+			0, // Sweep Time
+			PS6000_UP, // Sweep Mode
+			PS6000_ES_OFF, //Operation mode
+			1, // Cycle number
+			0, // Sweep number
+			PS6000_SIGGEN_RISING, // Trigger type (rising edge)
+			PS6000_SIGGEN_AUX_IN, // Trigger source (AUX)
+			3277 // AuxTrigger Voltage threshold (500 mV)
+		);
+		
+		if (ps != PICO_OK)
+		{
+		printf("error: %x\n",ps);
+			throw "Error in the PicoSquarePulseGen setup.";
+		}
+		else 
+		{
+			printf("PicoSquarePulseGen is setup:\n");
+			printf("PeakValue value = %f mV, Frequency = %f kHz, Width = %f ns\n", PeakValue*1e-3 , Frequency*1e-3, Width*1e9);
+		}
+	}
+	else
+	{
+		printf("Either PeakValue or Width input for PicoSquarePulseGen is too high!\n");
+		printf("PeakValue value = %f mV, Frequency = %f kHz, Width = %f ns\n", PeakValue*1e-3 , Frequency*1e-3, Width*1e9);
+	}
+
+}
