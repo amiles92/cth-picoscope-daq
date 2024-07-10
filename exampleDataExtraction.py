@@ -87,7 +87,7 @@ def readData(f, d):
 
     return data
 
-outFile = r"./data/03Jul24_81V_1.35V_0kV_3-6-8_Delay_IW098-0028.dat"
+outFile = r"./data/08Jul24_81V_900mV_0kV_3-6-8_IW098-0028.dat"
 
 f = open(outFile, 'rb')
 

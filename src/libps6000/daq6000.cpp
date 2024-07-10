@@ -479,9 +479,21 @@ char* getSerials()
 
 int runFunctionGenerator(uint32_t PeakValue, double Width)
 {
-    UNIT *unit = new UNIT();
-    findUnit(unit, (int8_t*) "GO024/040");
-    PicoSquarePulseGen(unit, PeakValue, Width );
+    if (g_dcc.unitInitialised == FALSE)
+    {
+        return 0;
+    }
+    PicoSquarePulseGen(&g_unit, PeakValue, Width);
+    return 1;
+}
+
+int clearFunctionGenerator()
+{
+    if (g_dcc.unitInitialised == FALSE)
+    {
+        return 0;
+    }
+    ClearPulseGen(&g_unit);
     return 1;
 }
 
@@ -495,6 +507,8 @@ PYBIND11_MODULE(daq6000, m)
     m.def("seriesCollectData", &seriesCollectData, py::return_value_policy::copy);
     m.def("seriesCloseDaq", &seriesCloseDaq, py::return_value_policy::copy);
     m.def("getSerials", &getSerials, py::return_value_policy::copy);
+    m.def("initFunctionGenerator", &seriesInitDaq, py::return_value_policy::copy);
     m.def("runFunctionGenerator", &runFunctionGenerator, py::return_value_policy::copy);
+    m.def("closeFunctionGenerator", &seriesCloseDaq, py::return_value_policy::copy);
 }
 

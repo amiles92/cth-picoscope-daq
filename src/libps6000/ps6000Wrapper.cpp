@@ -819,6 +819,27 @@ int16_t mv_to_adc(int16_t mv, int16_t ch)
 	return (mv * PS6000_MAX_VALUE) / inputRanges[ch];
 }
 
+void ClearPulseGen(UNIT *unit)
+{
+	PICO_STATUS ps = ps6000SetSigGenBuiltInV2(
+		unit->handle, // Handle
+		0,  // Voltage offset
+		0,	 // PkToPk voltage
+		PS6000_SINE, // Squarewave signal
+		0, // StartFrequency
+		0, // StopFrequency (sweep)
+		0, // Sweep Increment
+		0, // Sweep Time
+		PS6000_UP, // Sweep Mode
+		PS6000_ES_OFF, //Operation mode
+		0, // Cycle number
+		0, // Sweep number
+		PS6000_SIGGEN_RISING, // Trigger type (rising edge)
+		PS6000_SIGGEN_NONE, // Trigger source (AUX)
+		0 // AuxTrigger Voltage threshold (500 mV)
+	);
+}
+
 void PicoSquarePulseGen(UNIT *unit, uint32_t PeakValue, double Width)
 {
 	PeakValue=PeakValue*1e3;

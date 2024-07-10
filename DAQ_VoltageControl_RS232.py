@@ -27,8 +27,9 @@ import daq6000a as daq
 
 args = sys.argv
 numberargs = 7
+minArgs = 6
 ExitFlag=0
-if(len(args)!=numberargs): 
+if(len(args) > numberargs | len(args) < minArgs):
     print('Use this file to set voltage on Keithley 6487 Picoammeter + Voltage Source: ')
     print(' ')
     print('sudo python DAQ_VoltageControl_RS232.py [1] [2] [3] [4] [5] [6]')
@@ -189,7 +190,10 @@ CompFlag=0 #Error flag
 #CurrentVoltage = what the voltage should be
 #VoltageRead = what the voltage read from the instrument is
 
-DAQ_Init = str(args[6])
+if len(args < numberargs):
+    DAQ_Init = "1"
+else:
+    DAQ_Init = str(args[6])
 DAQ_ParamsLoaded = 0
 DAQ_End = 0
 picoscopes = ['IW098/0028','IW114/0004']

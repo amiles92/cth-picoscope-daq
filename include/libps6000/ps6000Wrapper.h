@@ -150,5 +150,7 @@ void PREF4 CallBackBlock(int16_t handle, PICO_STATUS status, void * pParameter);
 ****************************************************************************/
 int16_t mv_to_adc(int16_t mv, int16_t ch);
 
+void ClearPulseGen(UNIT *unit);
+
 void PicoSquarePulseGen(UNIT *unit, uint32_t PeakValue, double Width);
 
