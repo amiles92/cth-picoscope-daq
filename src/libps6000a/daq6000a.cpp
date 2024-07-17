@@ -191,6 +191,7 @@ void freeDataBuffers(dataCollectionConfig &dcc)
 
 void resetDataBuffers(dataCollectionConfig &dcc)
 {
+    freeDataBuffers(dcc);
     dcc.dataBuffers = SetDataBuffers(&dcc.unit, dcc.activeChannels, dcc.chPostSamplesPerWaveform, 
             dcc.samplesPreTrigger, dcc.numWaveforms, dcc.maxPostSamples);
 }
