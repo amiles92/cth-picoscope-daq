@@ -19,10 +19,8 @@ Arguments
 import sys
 print(sys.path)
 import pyvisa as visa
-import decorator
 import time
 import numpy as np
-import matplotlib.pyplot as plt
 import daq6000a as daq
 
 args = sys.argv
