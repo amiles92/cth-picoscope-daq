@@ -457,6 +457,10 @@ int seriesSetDaqSettings(
     {
         return 0;
     }
+    if (g_dcc.dataConfigured == TRUE)
+    {
+        freeDataBuffers(g_dcc);
+    }
     try
     {
         setActiveChannels(g_dcc, chAVRange, chBVRange, chCVRange, chDVRange);
@@ -515,15 +519,15 @@ int seriesCollectData(char *outputFileBasename)
 
 int seriesCloseDaq()
 {
-    if (g_dcc.unitInitialised)
-    {
-        CloseDevice(&g_dcc.unit);
-        g_dcc.unitInitialised = FALSE;
-    }
     if (g_dcc.dataConfigured)
     {
         freeDataBuffers(g_dcc);
         g_dcc.dataConfigured = FALSE;
+    }
+    if (g_dcc.unitInitialised)
+    {
+        CloseDevice(&g_dcc.unit);
+        g_dcc.unitInitialised = FALSE;
     }
     return 1;
 }
@@ -565,6 +569,10 @@ int multiSeriesSetDaqSettings(
             {
                 printf("Unit uninitialised in multiDcc\n");
                 return 0;
+            }
+            if (g_vecDcc.at(i).dataConfigured == TRUE)
+            {
+                freeDataBuffers(g_vecDcc.at(i));
             }
             setActiveChannels(g_vecDcc.at(i), chAVRange, chBVRange, chCVRange, chDVRange);
             printf("%s: Active channel(s) configured\n", g_vecDcc.at(i).serial);
@@ -649,15 +657,15 @@ int multiSeriesCloseDaq()
 {
     for (int i = 0; i < g_vecDcc.size(); i++)
     {
-        if (g_vecDcc.at(i).unitInitialised)
-        {
-            CloseDevice(&g_vecDcc.at(i).unit);
-            g_vecDcc.at(i).unitInitialised = FALSE;
-        }
         if (g_vecDcc.at(i).dataConfigured)
         {
             freeDataBuffers(g_vecDcc.at(i));
             g_vecDcc.at(i).dataConfigured = FALSE;
+        }
+        if (g_vecDcc.at(i).unitInitialised)
+        {
+            CloseDevice(&g_vecDcc.at(i).unit);
+            g_vecDcc.at(i).unitInitialised = FALSE;
         }
     }
     return 1;
