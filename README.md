@@ -12,8 +12,12 @@
 * gcc-11 for PyBind11
 * Python3
 * PicoScope libraries (only made for ps6000 and ps6000a for the moment)\
+  Installation instructions for Ubuntu and OpenSUSE can be found [here](https://www.picotech.com/downloads/linux)\
   Ubuntu:
   ```sh
+  bash -c 'wget -O- https://labs.picotech.com/Release.gpg.key | gpg --dearmor > /usr/share/keyrings/picotech-archive-keyring.gpg' \
+  bash -c 'echo "deb [signed-by=/usr/share/keyrings/picotech-archive-keyring.gpg] https://labs.picotech.com/picoscope7/debian/ picoscope main" >/etc/apt/sources.list.d/picoscope7.list' \
+  apt-get update \
   apt install libps6000 libps6000a
   ```
   RedHat distributions:
