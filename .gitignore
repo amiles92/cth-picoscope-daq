@@ -1,6 +1,7 @@
 **/.vscode*
 *.so
 *.dat
-*.txt
+*.exe
+*.pdf
 plots/*
 npys/*

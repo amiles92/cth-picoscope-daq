@@ -80,7 +80,7 @@ std::string bytesString(std::ifstream& f, const int n = 0) {
     return s;
 }
 
-float adc2mv(const int value, const int range) {
+float adc2mv(const int16_t value, const int range) {
     return (value / 32512.0f) * ps6000VRanges[range];
 }
 
@@ -126,26 +126,55 @@ void printHeader(const std::unordered_map<std::string, std::variant<int, float, 
     }
 }
 
+bool isLittleEndian(){
+	uint32_t i(1);
+	char*c = (char*)&i;
+	return bool(*c);
+}
+
 std::vector<std::vector<std::vector<sample>>> readData(std::ifstream& f, std::unordered_map<std::string, std::variant<int, float, std::string>>& d){
     std::vector<std::vector<std::vector<sample>>> data;
+    bool little(isLittleEndian());
     int nWf = std::get<int>(d["numWaveforms"]);
     double timeBase = pow(2, std::get<int>(d["timebase"])) * 0.2;
     for(int ch(0); ch<4; ++ch){
         if(std::get<std::string>(d["activeChannels"])[ch] == '0'){
             continue;
         }
+        //std::cout<< ch << std::endl;
         int nSamples = std::get<int>(d["ch" + std::string(1, 'A'+ch) + "Samples"]);
-        std::vector<int> chADCData(nWf * nSamples);
-        f.read(reinterpret_cast<char*>(chADCData.data()), nWf*nSamples*sizeof(int));
+        std::vector<int16_t> chADCData(nWf * nSamples);
+        int16_t *chADCDataPter = chADCData.data();
+        if(little){
+        	for(int i0(0); i0 < nSamples*nWf; ++i0){
+        		int16_t tmp;
+        		f.read(reinterpret_cast<char*>(&tmp), sizeof(int16_t));
+        		/*if(i0%10000 == 0){
+        			std::cout << i0 << std::endl;
+        			printf("%x\n", __builtin_bswap16(tmp));
+        		}*/
+        		*chADCDataPter = __builtin_bswap16(tmp);
+        		/*if(i0%10000 == 0){
+        			printf("%i - %i\n", sizeof(tmp), sizeof(*chADCDataPter));
+        			printf("%x\n\n", *chADCDataPter);
+        		}*/
+        		chADCDataPter++;
+        	}
+        }else{
+        	f.read(reinterpret_cast<char*>(chADCData.data()), nWf*nSamples*sizeof(int));
+        }
+        //std::cout << "test0" << std::endl;
         std::vector<std::vector<sample>> chData;
-        for (int i0(0); i0<nWf; ++i0) {
+        for (int i0(0); i0 < nWf; ++i0) {
         	std::vector<sample> wfChData;
-        	for(int i1(0); i1<nSamples; ++i1){
-        		sample newSample{adc2mv(chADCData[i0*nSamples+i1], std::get<int>(d["ch" + std::string(1, 'A'+ch) + "VRange"])),timeBase*i1};
+        	for(int i1(0); i1 < nSamples; ++i1){
+        		sample newSample{adc2mv(chADCData[i0*nSamples+i1], std::get<int>(d["ch" + std::string(1, 'A'+ch) + "VRange"])), timeBase*i1};
             	wfChData.push_back(newSample);
+            	//std::cout << newSample.time << " / " << newSample.voltage << std::endl;
             }
             chData.push_back(wfChData);
         }
+        //std::cout << "test1" << std::endl;
         data.push_back(chData);
     }
     return data;
@@ -201,7 +230,7 @@ points getMaxData(const std::vector<sample>& data){
     return result;
 }
 
-void plottingFirstWaveforms(const std::vector<std::vector<std::vector<sample>>>& data, std::vector<THn*> plots, 
+void plottingFirstWaveforms(const std::vector<std::vector<std::vector<sample>>>& data, std::vector<THn*>& plots, 
                             const int nBinsT, const int nBinsV, const int nSamples, const double timeBase){
     int nBins[2] = {nBinsT, nBinsV};
     double lower[2] = {0, 0};
@@ -227,17 +256,18 @@ void plottingFirstWaveforms(const std::vector<std::vector<std::vector<sample>>>&
     
 	for(int i0(0); i0<data.size(); ++i0){
 		TString ch(std::string(1, 'A'+i0)), nWf(std::to_string(numWf));
-		THnD* h = new THnD("ch"+ch+"_"+nWf+"Wf", ";time [ns];charge [mV]",2,  nBins, lower, upper);
+		THnD* h = new THnD("ch"+ch+"_"+nWf+"Wf", ";time [ns];charge [mV]", 2,  nBins, lower, upper);
 		for(int i1(0); i1<numWf; ++i1){
 			for(int i2(0); i2<data[i0][i1].size(); ++i2){
-				h->Fill(data[i0][i1][i2].time, data[i0][i1][i2].voltage);
+				double value [2] = {data[i0][i1][i2].time, data[i0][i1][i2].voltage};
+				h->Fill(value);
 			}
 		}
 		plots.push_back(h);
 	}
 }
 
-void plottingMinimum(const std::vector<std::vector<std::vector<sample>>>& data, std::vector<THn*> plots, 
+void plottingMinimum(const std::vector<std::vector<std::vector<sample>>>& data, std::vector<THn*>& plots, 
                      const int nBinsMinimumTime, const int nBinsPulseMinimum, const int nSamples, const double timeBase){
 	int nBinsTime[1] = {nBinsMinimumTime};
 	double lowerTime[1] = {0};
@@ -266,11 +296,13 @@ void plottingMinimum(const std::vector<std::vector<std::vector<sample>>>& data, 
 	for(int i0(0); i0<matrixMinimum.size(); ++i0){
 		TString ch(std::string(1, 'A'+i0));
 		THnD* h = new THnD("ch"+ch+"_pulseMinimum", ";charge [mV]", 1, nBinsMini, lowerMini, upperMini);
-		THnD* h1 = new THnD("ch"+ch+"_peakTiming", ";time [ns]", 1, nBinsTime, lowerTime, upperTime);
+		THnD* h1 = new THnD("ch"+ch+"_pulseMinimumTime", ";time [ns]", 1, nBinsTime, lowerTime, upperTime);
 		for(int i1(0); i1<matrixMinimum[i0].size(); ++i1){
-			h->Fill(matrixMinimum[i0][i1].value);
+			double valueCharge[1] = {matrixMinimum[i0][i1].value};
+			h->Fill(valueCharge);
 			for(int i2(0); i2<matrixMinimum[i0][i1].index.size(); ++i2){
-				h1->Fill(matrixMinimum[i0][i1].index[i2] * timeBase);
+				double valueTime[1] = {matrixMinimum[i0][i1].index[i2] * timeBase};
+				h1->Fill(valueTime);
 			}
 		}
 		plotsMini.push_back(h);
@@ -312,7 +344,7 @@ std::vector<sample> movingAverage(const std::vector<sample>& data, const int win
 }
 
 //TODO: Do we really need it???
-void plottingMinimumMovingAverage(const std::vector<std::vector<std::vector<sample>>>& data, std::vector<THn*> plots, 
+void plottingMinimumMovingAverage(const std::vector<std::vector<std::vector<sample>>>& data, std::vector<THn*>& plots, 
                              const int nBins, const int windowLowerEdge, const int windowUpperEdge, const int nHalfAverage,
                              const int nSamples, const double timeBase){
 }
@@ -336,7 +368,7 @@ double chargeIntegration(const std::vector<sample>& data, const int windowLowerE
 	return integratedCharge;
 }
 
-void plottingIntegratedCharge(const std::vector<std::vector<std::vector<sample>>>& data, std::vector<THn*> plots, const int nBinsIntegrated, 
+void plottingIntegratedCharge(const std::vector<std::vector<std::vector<sample>>>& data, std::vector<THn*>& plots, const int nBinsIntegrated, 
                               const int windowLowerEdge, const int windowUpperEdge, const double timeBase){
 	int nBins[1] = {nBinsIntegrated};
 	double lower[1] = {0}, upper[1] = {0};
@@ -360,7 +392,8 @@ void plottingIntegratedCharge(const std::vector<std::vector<std::vector<sample>>
 		TString ch(std::string(1, 'A'+i0));
 		THnD* h = new THnD("ch"+ch+"_integratedCharge", ";integrated charge [V.ns]", 1, nBins, lower, upper);
 		for(int i1(0); i1<matrixIntegratedCharge[i0].size(); ++i1){
-			h->Fill(matrixIntegratedCharge[i0][i1]);
+			double value[1] = {matrixIntegratedCharge[i0][i1]};
+			h->Fill(value);
 		}
 		plots.push_back(h);
 	}
@@ -416,27 +449,27 @@ void addTitle(TCanvas* canvas, const TString title){
 	Tl.SetTextColor(kBlack);
 	Tl.SetTextAlign(31);
 	Tl.SetTextSize(0.03f);
-	Tl.DrawLatex(0.85,0.96,title);
+	Tl.DrawLatex(0.85, 0.96, title);
 }
 
 
 TCanvas* drawCanvas(TString canvasName, TH1D* histo, const TString &title){
-	TCanvas* canvas=new TCanvas(canvasName,canvasName,1000,1000);
+	TCanvas* canvas=new TCanvas(canvasName, canvasName, 1000, 1000);
 	canvas->cd();
 	setStyle(canvas);
-	addTitle(canvas,title);
+	addTitle(canvas, title);
 	return canvas;
 }
 
-TCanvas* drawColorCanvas(TString canvasName, TH2D* histo, const TString &title, const Double_t max_value, const Double_t min_value){
-	TCanvas* canvas=new TCanvas(canvasName,canvasName,1238,1000);
+TCanvas* drawColorCanvas(TString canvasName, TH2D* histo, const TString &title, const Double_t maxValue, const Double_t minValue){
+	TCanvas* canvas=new TCanvas(canvasName, canvasName, 1238, 1000);
 	canvas->cd();
 	setStyle(canvas);
-	histo->SetMaximum(max_value);
-	histo->SetMinimum(min_value);
+	histo->SetMaximum(maxValue);
+	histo->SetMinimum(minValue);
 	histo->Draw("colz");
 	gPad->Update();
-	addTitle(canvas,title);
+	addTitle(canvas, title);
 	
 	return canvas;
 }
@@ -448,96 +481,107 @@ void saveInPDF(const TString directory, const TString pdf_name, const TString pn
 }
 
 
-/*void savingPlots(const std::vector<THn*>& plots){
+void savingPlots(std::vector<THn*>& plots){
 	TString outputDirectory("/home/chadeau/Documents/codes/MPPC_QC/cth-picoscope-daq/");
-	std::vector<TString> pdfFiles{"100wf", "pulseMin", "pulseMinTime", "inteQ"};
 	for(int i0(0); i0<plots.size(); ++i0){
+		std::string histoName(plots[i0]->GetName());
 		TString ch(std::string(1, 'A' + i0%4));
-		if(i0<4){
-			TString pdfFile(pdfFiles[0]+"_ch"+ch+".pdf");
-			saveInPDF(outputDirectory,pdfFile,plots[i0]->GetName(),
-		           	  drawColorCanvas(plots[i0]->GetName(), plots[i0], 
+		TString pdfFile(histoName+".pdf");
+		int dimensions(plots[i0]->GetNdimensions());
+		if(dimensions == 2){
+			/*TString labelX(plots[i0]->GetAxis(0)->GetTitle()), labelY(plots[i0]->GetAxis(1)->GetTitle());
+			TH2D* h = new TH2D(plots[i0]->GetName(), ";"+labelX+";"+labelY+"", 
+							   plots[i0]->GetAxis(0)->GetNbins(), plots[i0]->GetAxis(0)->GetXmin(), plots[i0]->GetAxis(0)->GetXmax(),
+			                   plots[i0]->GetAxis(1)->GetNbins(), plots[i0]->GetAxis(1)->GetXmin(), plots[i0]->GetAxis(1)->GetXmax());
+			for(int i1(1); i1 <= plots[i0]->GetNbins() ; ++i1){
+				h->SetBinContent(i1, plots[i0]->GetBinContent(i1));
+			}*/
+			TH2D* h = plots[i0]->Projection(1,0);
+			saveInPDF(outputDirectory, pdfFile, h->GetName(),
+		           	  drawColorCanvas(h->GetName(), h, 
 		          	  "100 first waveforms for ch "+ch, 
-		          	  maxValueTH2D(plots[i0]), minValueTH2D(plots[i0])));
-		}else if(i0>=4 && i0<8){
-			TString pdfFile(pdfFiles[1]+"_ch"+ch+".pdf");
-			saveInPDF(outputDirectory,pdfFile,plots[i0]->GetName(),
-						  drawCanvas(plots[i0]->GetName(),plots[i0],
-						  " for ch "+ch));
-		}else if(i0>=8 && i0<12){
-			TString pdfFile(pdfFiles[2]+"_ch"+ch+".pdf");
-			saveInPDF(outputDirectory,pdfFile,plots[i0]->GetName(),
-						  drawCanvas(plots[i0]->GetName(),plots[i0],
-						  " for ch "+ch));
-		}else if(i0>=12 && i0<16){
-			TString pdfFile(pdfFiles[3]+"_ch"+ch+".pdf");
-			saveInPDF(outputDirectory,pdfFile,plots[i0]->GetName(),
-						  drawCanvas(plots[i0]->GetName(),plots[i0],
+		          	  maxValueTH2D(h), minValueTH2D(h)));
+			
+		}else if (dimensions == 1){
+			/*TString labelX(plots[i0]->GetAxis(0)->GetTitle());
+			TH1D* h = new TH1D(plots[i0]->GetName(), ";"+labelX+"", 
+							   plots[i0]->GetAxis(0)->GetNbins(), plots[i0]->GetAxis(0)->GetXmin(), plots[i0]->GetAxis(0)->GetXmax());
+			for(int i1(1); i1 <= plots[i0]->GetNbins() ; ++i1){
+				h->SetBinContent(i1, plots[i0]->GetBinContent(i1));
+			}*/
+			TH1D* h = plots[i0]->Projection(0);
+			saveInPDF(outputDirectory, pdfFile, h->GetName(),
+						  drawCanvas(h->GetName(), h,
 						  " for ch "+ch));
 		}
 	}
-}*/
+}
 
   ///////////////////////////////////////////////////////////////////////////////
  ///                              Main function                              ///
 ///////////////////////////////////////////////////////////////////////////////
 
 int main(int argc , char** argv){
-	if (argc != 3){
-		std::cerr<<"ERROR: you should have 2 parameters..."<<std::endl;
+	if (argc != 5){
+		std::cerr<<"ERROR: you should have 5 parameters..."<<std::endl;
 		return 1;
 	}
 	std::string analysisType(argv[1]);
-	std::string fileName(argv[2]);
-	std::ifstream fileList{fileName};
-	if(isExisting(fileName) != true){
-		std::cerr<<"ERROR: the file '" + fileName + "' does not exist..."<<std::endl;
-		return 1;
-	}
-	for(std::string fileToProcess; std::getline(fileList,fileToProcess);){	
-		if(isExisting(fileToProcess) != true){
-			std::cerr<<"ERROR: the file '" + fileToProcess + "' does not exist..."<<std::endl;
-			return 1;
-		}else{
-			std::ifstream file(fileToProcess, std::ios::binary);
-    		if (!file.is_open()) {
-        		std::cerr << "Error opening file." << std::endl;
-        		return 1;
-    		}
-    		clock_t startTime, endTime;
-    		startTime = clock();
-    		std::cout<<"\n######### Starting pre-analysis: "<<fileToProcess<<std::endl;
-    		std::cout<<"###### Starting extraction..."<<std::endl;
-    		auto header = readHeader(file);
-    		if(showHeader == true){
-    			printHeader(header);
-    		}
-    		auto data = readData(file, header);
-    		file.close();
-    		std::cout<<"###### Finished extraction..."<<std::endl;
-    		std::cout<<"###### Starting plotting..."<<std::endl;
-    		std::vector<THn*> plots;
-    		int nSamples(getNumSamples(header));
-    		double timeBase(getTimeBase(header));
-    		int nBinsT(nSamples), nBinsV(100), nBinsMinimumTime(nSamples), nBinsPulseMinimum(300), nBinsIntegrated(300), nHalfAverage(10), windowLowerEdge(100), windowUpperEdge(130);
-    		plottingFirstWaveforms(data, plots, nBinsT, nBinsV, nSamples, timeBase);
-    		std::cout<<"### Plotted first waveforms..."<<std::endl;
-    		plottingMinimum(data, plots, nBinsMinimumTime, nBinsPulseMinimum, nSamples, timeBase);
-    		std::cout<<"### Plotted pulse minimum and time..."<<std::endl;
-    		if(doMovingAverage == true){
-    			plottingMinimumMovingAverage(data, plots, nBinsPulseMinimum, windowLowerEdge, windowUpperEdge, nHalfAverage, nSamples, timeBase);
-    			std::cout<<"### Plotted moving averaged minimum peaks value..."<<std::endl;
-    		}
-    		plottingIntegratedCharge(data, plots, nBinsIntegrated, windowLowerEdge, windowUpperEdge, timeBase);
-    		std::cout<<"### Plotted integrated charge..."<<std::endl;
-    		std::cout<<"###### Finished Plotting..."<<std::endl;
-    		std::cout<<"###### Starting saving..."<<std::endl;
-    		//savingPlots(plots);
-    		std::cout<<"###### Finished saving..."<<std::endl;
-    		endTime = clock();
-    		std::cout<<"###### Finished pre-analysis: "<< (float) (endTime - startTime)/CLOCKS_PER_SEC <<"s"<<std::endl;
+	std::string date(argv[2]);
+	std::string MPPCsNumbers(argv[3]);
+	std::string directory(argv[4]);
+	if(analysisType == "pre-analyse"){
+		for(int i0(0); i0 < MPPCsHV.size(); ++i0){
+			for(int i1(0); i1 < LEDV.size(); ++i1){
+				for(int i2(0); i2 < picoscopeNames.size(); ++i2){
+					std::string fileToProcess(directory+"/"+date+"_"+MPPCsHV[i0]+"_"+LEDV[i1]+"_0kV_"+MPPCsNumbers+"_"+picoscopeNames[i2]+".dat");
+					if(isExisting(fileToProcess) != true){
+						std::cerr<<"ERROR: the file '" + fileToProcess + "' does not exist..."<<std::endl;
+						continue;
+					}else{
+						std::ifstream file(fileToProcess, std::ios::binary);
+    					if (!file.is_open()) {
+        					std::cerr << "Error opening file." << std::endl;
+        					return 1;
+    					}
+    					clock_t startTime, endTime;
+    					startTime = clock();
+    					std::cout<<"\n######### Starting pre-analysis: "<<fileToProcess<<std::endl;
+    					std::cout<<"###### Starting extraction..."<<std::endl;
+    					auto header = readHeader(file);
+    					if(showHeader == true){
+    						printHeader(header);
+    					}
+    					auto data = readData(file, header);
+    					file.close();
+    					std::cout<<"###### Finished extraction..."<<std::endl;
+    					std::cout<<"###### Starting plotting..."<<std::endl;
+    					std::vector<THn*> plots;
+    					int nSamples(getNumSamples(header));
+    					double timeBase(getTimeBase(header));
+    					int nBinsT(nSamples), nBinsV(100), nBinsMinimumTime(nSamples), nBinsPulseMinimum(300), nBinsIntegrated(300), nHalfAverage(10), windowLowerEdge(100), windowUpperEdge(130);
+    					plottingFirstWaveforms(data, plots, nBinsT, nBinsV, nSamples, timeBase);
+    					std::cout<<"### Plotted first waveforms..."<<std::endl;
+    					plottingMinimum(data, plots, nBinsMinimumTime, nBinsPulseMinimum, nSamples, timeBase);
+    					std::cout<<"### Plotted pulse minimum and time..."<<std::endl;
+    					if(doMovingAverage == true){
+    						plottingMinimumMovingAverage(data, plots, nBinsPulseMinimum, windowLowerEdge, windowUpperEdge, nHalfAverage, nSamples, timeBase);
+    						std::cout<<"### Plotted moving averaged minimum peaks value..."<<std::endl;
+    					}
+    					plottingIntegratedCharge(data, plots, nBinsIntegrated, windowLowerEdge, windowUpperEdge, timeBase);
+    					std::cout<<"### Plotted integrated charge..."<<std::endl;
+    					std::cout<<"###### Finished Plotting..."<<std::endl;
+    					std::cout<<"###### Starting saving..."<<std::endl;
+    					savingPlots(plots);
+    					std::cout<<"###### Finished saving..."<<std::endl;
+    					endTime = clock();
+    					std::cout<<"###### Finished pre-analysis: "<< (float) (endTime - startTime)/CLOCKS_PER_SEC <<"s\n"<<std::endl;
+    				}
+				}	
+			}
 		}
+	}else if(analysisType == "analyse"){
+	
 	}
-	std::cout<<std::endl;
 	return 0;
 }

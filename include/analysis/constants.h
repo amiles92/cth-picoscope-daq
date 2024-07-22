@@ -58,8 +58,11 @@ struct gaussParams{
 	double sigma;
 };
 
-std::vector<int> ps6000VRanges{10, 20, 50, 100, 200, 500, 1000, 2000, 5000, 10000, 20000, 50000};
-bool showHeader(false);
-bool doMovingAverage(false);
+const std::vector<int> ps6000VRanges{10, 20, 50, 100, 200, 500, 1000, 2000, 5000, 10000, 20000, 50000};
+const bool showHeader(false);
+const bool doMovingAverage(false);
+const std::vector<std::string> MPPCsHV{"78V", "78.5V", "79V", "79.5V","80V", "80.5V", "81V", "81.5V", "82V", "82.5V", "83V"};
+const std::vector<std::string> LEDV{"Dark", "805mV", "810mV", "820mV", "830mV", "840mV", "850mV", "860mV", "870mV", "880mV", "890mV", "900mV", "905mV", "920mV"};
+const std::vector<std::string> picoscopeNames{"IW098-0028", "IW114-0004"};
 
 #endif //constants_h
