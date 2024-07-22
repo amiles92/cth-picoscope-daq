@@ -5,6 +5,7 @@
 *.7z
 **/__pycache__/*
 *.npy
+*.exe
 *.pdf
 plots/*
 npys/*

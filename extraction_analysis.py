@@ -3,6 +3,7 @@ from matplotlib.backends.backend_pdf import PdfPages
 import matplotlib.pyplot as plt
 import numpy as np
 import os
+import ROOT
 from scipy import stats, optimize
 from scipy.stats import norm
 from scipy.signal import find_peaks
@@ -126,20 +127,34 @@ saving = 0
 #                 "08Jul24_81V_900mV_0kV_3-6-8_Delay_IW098-0028", "08Jul24_81V_900mV_0kV_3-6-8_Delay_IW114-0004"]
 #inputFileList = ["08Jul24_81V_900mV_0kV_3-6-8_IW098-0028", "08Jul24_81V_900mV_0kV_3-6-8_IW114-0004"]
 #inputFileList = ["08Jul24_81V_Dark_0kV_3-6-8_IW098-0028", "08Jul24_81V_Dark_0kV_3-6-8_IW114-0004"]
-inputFileList = ["09Jul24_81V_Dark_0kV_3-6-8_IW098-0028", "09Jul24_81V_Dark_0kV_3-6-8_IW114-0004",
-                 "09Jul24_81V_805mV_0kV_3-6-8_IW098-0028", "09Jul24_81V_805mV_0kV_3-6-8_IW114-0004", 
-                 "09Jul24_81V_810mV_0kV_3-6-8_IW098-0028", "09Jul24_81V_810mV_0kV_3-6-8_IW114-0004",
-                 "09Jul24_81V_820mV_0kV_3-6-8_IW098-0028", "09Jul24_81V_820mV_0kV_3-6-8_IW114-0004",
-                 "09Jul24_81V_830mV_0kV_3-6-8_IW098-0028", "09Jul24_81V_830mV_0kV_3-6-8_IW114-0004", 
-                 "09Jul24_81V_840mV_0kV_3-6-8_IW098-0028", "09Jul24_81V_840mV_0kV_3-6-8_IW114-0004",
-                 "09Jul24_81V_850mV_0kV_3-6-8_IW098-0028", "09Jul24_81V_850mV_0kV_3-6-8_IW114-0004",
-                 "09Jul24_81V_860mV_0kV_3-6-8_IW098-0028", "09Jul24_81V_860mV_0kV_3-6-8_IW114-0004", 
-                 "09Jul24_81V_870mV_0kV_3-6-8_IW098-0028", "09Jul24_81V_870mV_0kV_3-6-8_IW114-0004",
-                 "09Jul24_81V_880mV_0kV_3-6-8_IW098-0028", "09Jul24_81V_880mV_0kV_3-6-8_IW114-0004",
-                 "09Jul24_81V_890mV_0kV_3-6-8_IW098-0028", "09Jul24_81V_890mV_0kV_3-6-8_IW114-0004", 
-                 "09Jul24_81V_900mV_0kV_3-6-8_IW098-0028", "09Jul24_81V_900mV_0kV_3-6-8_IW114-0004",
-                 "09Jul24_81V_905mV_0kV_3-6-8_IW098-0028", "09Jul24_81V_905mV_0kV_3-6-8_IW114-0004",
-                 "09Jul24_81V_920mV_0kV_3-6-8_IW098-0028", "09Jul24_81V_920mV_0kV_3-6-8_IW114-0004"]
+#inputFileList = ["09Jul24_81V_Dark_0kV_3-6-8_IW098-0028", "09Jul24_81V_Dark_0kV_3-6-8_IW114-0004",
+#                 "09Jul24_81V_805mV_0kV_3-6-8_IW098-0028", "09Jul24_81V_805mV_0kV_3-6-8_IW114-0004", 
+#                 "09Jul24_81V_810mV_0kV_3-6-8_IW098-0028", "09Jul24_81V_810mV_0kV_3-6-8_IW114-0004",
+#                 "09Jul24_81V_820mV_0kV_3-6-8_IW098-0028", "09Jul24_81V_820mV_0kV_3-6-8_IW114-0004",
+#                 "09Jul24_81V_830mV_0kV_3-6-8_IW098-0028", "09Jul24_81V_830mV_0kV_3-6-8_IW114-0004", 
+#                 "09Jul24_81V_840mV_0kV_3-6-8_IW098-0028", "09Jul24_81V_840mV_0kV_3-6-8_IW114-0004",
+#                 "09Jul24_81V_850mV_0kV_3-6-8_IW098-0028", "09Jul24_81V_850mV_0kV_3-6-8_IW114-0004",
+#                 "09Jul24_81V_860mV_0kV_3-6-8_IW098-0028", "09Jul24_81V_860mV_0kV_3-6-8_IW114-0004", 
+#                 "09Jul24_81V_870mV_0kV_3-6-8_IW098-0028", "09Jul24_81V_870mV_0kV_3-6-8_IW114-0004",
+#                 "09Jul24_81V_880mV_0kV_3-6-8_IW098-0028", "09Jul24_81V_880mV_0kV_3-6-8_IW114-0004",
+#                 "09Jul24_81V_890mV_0kV_3-6-8_IW098-0028", "09Jul24_81V_890mV_0kV_3-6-8_IW114-0004", 
+#                 "09Jul24_81V_900mV_0kV_3-6-8_IW098-0028", "09Jul24_81V_900mV_0kV_3-6-8_IW114-0004",
+#                 "09Jul24_81V_905mV_0kV_3-6-8_IW098-0028", "09Jul24_81V_905mV_0kV_3-6-8_IW114-0004",
+#                 "09Jul24_81V_920mV_0kV_3-6-8_IW098-0028", "09Jul24_81V_920mV_0kV_3-6-8_IW114-0004"]
+inputFileList = ["12Jul24_81V_Dark_1.2kV_3-6-8_31deg_IW098-0028", "12Jul24_81V_Dark_1.2kV_3-6-8_31deg_IW114-0004",
+                 "12Jul24_81V_805mV_1.2kV_3-6-8_31deg_IW098-0028", "12Jul24_81V_805mV_1.2kV_3-6-8_31deg_IW114-0004", 
+                 "12Jul24_81V_810mV_1.2kV_3-6-8_31deg_IW098-0028", "12Jul24_81V_810mV_1.2kV_3-6-8_31deg_IW114-0004",
+                 "12Jul24_81V_820mV_1.2kV_3-6-8_31deg_IW098-0028", "12Jul24_81V_820mV_1.2kV_3-6-8_31deg_IW114-0004",
+                 "12Jul24_81V_830mV_1.2kV_3-6-8_31deg_IW098-0028", "12Jul24_81V_830mV_1.2kV_3-6-8_31deg_IW114-0004", 
+                 "12Jul24_81V_840mV_1.2kV_3-6-8_31deg_IW098-0028", "12Jul24_81V_840mV_1.2kV_3-6-8_31deg_IW114-0004",
+                 "12Jul24_81V_850mV_1.2kV_3-6-8_31deg_IW098-0028", "12Jul24_81V_850mV_1.2kV_3-6-8_31deg_IW114-0004",
+                 "12Jul24_81V_860mV_1.2kV_3-6-8_31deg_IW098-0028", "12Jul24_81V_860mV_1.2kV_3-6-8_31deg_IW114-0004", 
+                 "12Jul24_81V_870mV_1.2kV_3-6-8_31deg_IW098-0028", "12Jul24_81V_870mV_1.2kV_3-6-8_31deg_IW114-0004",
+                 "12Jul24_81V_880mV_1.2kV_3-6-8_31deg_IW098-0028", "12Jul24_81V_880mV_1.2kV_3-6-8_31deg_IW114-0004",
+                 "12Jul24_81V_890mV_1.2kV_3-6-8_31deg_IW098-0028", "12Jul24_81V_890mV_1.2kV_3-6-8_31deg_IW114-0004", 
+                 "12Jul24_81V_900mV_1.2kV_3-6-8_31deg_IW098-0028", "12Jul24_81V_900mV_1.2kV_3-6-8_31deg_IW114-0004",
+                 "12Jul24_81V_905mV_1.2kV_3-6-8_31deg_IW098-0028", "12Jul24_81V_905mV_1.2kV_3-6-8_31deg_IW114-0004",
+                 "12Jul24_81V_920mV_1.2kV_3-6-8_31deg_IW098-0028", "12Jul24_81V_920mV_1.2kV_3-6-8_31deg_IW114-0004"]
 
 ###############################################################################
 ###                       Data extraction functions                         ###
@@ -374,6 +389,7 @@ if analysisType == "pre-analyse":
         print("### Extracting data from '" + inputFilePath + "'...")
         f = open(inputDirectory + inputFilePath, 'rb')
         header = readHeader(f)
+        print(header)
         data = readData(f, header)
         timebase = getTimebase(f, header)
         ch = 0
