@@ -69,7 +69,7 @@ def runMvList(vRange, oFilePatternRaw, mvList):
 
     return
 
-def main(mppcList):
+def main(mppcList, pmt):
 
     date = datetime.today().strftime('%Y-%m-%d')
 
@@ -120,7 +120,7 @@ def main(mppcList):
         for bias in biasVoltageList:
             vc.rampVoltage(vs, bias)
             mvLists = ledVoltageMap[bias]
-            daqPerBias(bias, mppcList, mvLists[0], mvLists[1], date)
+            daqPerBias(bias, mppcList, mvLists[0], mvLists[1], date, pmt=pmt)
     except:
         vc.rampVoltage(vs, 0)
 
@@ -148,7 +148,7 @@ def main(mppcList):
 
 if __name__ == '__main__':
     args = sys.argv
-    if len(args) != 4:
-        print("python3 fullDaq.py n1 n2 n3")
+    if len(args) != 5:
+        print("python3 fullDaq.py n1 n2 n3 n4")
         print("Add each mppc number in separate argument!")
-    main(args[1:])
+    main(args[1:4], args[4])
