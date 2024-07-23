@@ -3,3 +3,6 @@
 *.dat
 *.txt
 *.7z
+**/__pycache__/*
+*.npy
+*.pdf
