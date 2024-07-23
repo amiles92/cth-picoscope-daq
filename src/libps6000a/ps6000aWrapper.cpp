@@ -497,7 +497,9 @@ void StartMultiRapidBlock(vector<UNIT *> vecUnit, vector<int16_t> vecPreTrigger,
 			&vecTimeIndisposed.at(i), 0, MultiCallBackBlock, (void*) iPt);
 	}
 	
-	while (!(len <= __builtin_popcount(g_multiReady)) && !_kbhit()) // XXX: Should change to only cancel if getch == ctrl+c
+	while (!(len <= __builtin_popcount(g_multiReady)) && !_kbhit() &&
+		(5 > chrono::duration_cast<std::chrono::seconds>
+		(std::chrono::steady_clock::now() - begin).count())) // XXX: Should change to only cancel if getch == ctrl+c
 	{
 		usleep(0);
 	}
@@ -505,18 +507,25 @@ void StartMultiRapidBlock(vector<UNIT *> vecUnit, vector<int16_t> vecPreTrigger,
 	if (!(len <= __builtin_popcount(g_multiReady)))
 	{
 		_getch();
+		BOOL contAnyways = TRUE;
 		for (int i = 0; i < len; i++)
 		{
 			status = ps6000aStop(vecUnit.at(i)->handle);
 			status = ps6000aGetNoOfCaptures(vecUnit.at(i)->handle, &vecNCompletedCaptures.at(i));
-		printf("Rapid capture aborted.\n");
-		printf("%s: %d complete blocks were captured\n", vecUnit.at(i)->serial, 
+			printf("Rapid capture aborted.\n");
+			printf("%s: %d complete blocks were captured\n", vecUnit.at(i)->serial, 
 			(int) vecNCompletedCaptures.at(i));
+			if (vecNCompletedCaptures.at(i) < vecNumWaveforms.at(i))
+			{
+				contAnyways = FALSE;
+			}
 		}
-		printf("Early abort writeout not yet supported\n");
+		if (!contAnyways)
+		{
+			printf("Early abort writeout not yet supported\n");
 
-		throw "aborted, need to implement early cancellation writeout";
-
+			throw "aborted, need to implement early cancellation writeout";
+		}
 	}
 
 	chrono::steady_clock::time_point end = std::chrono::steady_clock::now();
