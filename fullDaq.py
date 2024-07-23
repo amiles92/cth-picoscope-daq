@@ -114,6 +114,8 @@ def main(mppcList):
 
     initPicoScopes(picoscopes, fnGen)
 
+    input("Ramp PMT then press enter to begin...")
+
     try:
         for bias in biasVoltageList:
             vc.rampVoltage(vs, bias)
