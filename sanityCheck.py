@@ -106,7 +106,7 @@ def baseline(chData):
 def sanityBool(fileName, output=False, plot=False):
     mean, std = main(fileName, plot=plot, output=output)
 
-    return np.any(np.abs(mean) < 3 * np.abs(std))
+    return np.any(np.abs(mean[:3]) < 2000) or (np.abs(mean[3]) < 50)
 
 
 def main(fileName, plot=True, output=True, show=True):
