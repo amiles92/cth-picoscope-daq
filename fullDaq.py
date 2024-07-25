@@ -69,7 +69,7 @@ def runMvList(vRange, oFilePatternRaw, mvList):
 
     return
 
-def main(mppcList, extra=''):
+def main(mppcList, reset, extra=''):
 
     start = time.time()
 
@@ -101,7 +101,7 @@ def main(mppcList, extra=''):
                      78  : [[805, 810, 820],[840,870,890]],
     }
 
-    resetFlag = True
+    # resetFlag = True
 
     targetVoltage   = biasVoltageList[0]
     normIncrement   = 2
@@ -110,10 +110,11 @@ def main(mppcList, extra=''):
 
     jumpTarget = 70
 
-    vs = vc.voltageSettings(resetFlag, threshVoltage, normIncrement, 
+    vs = vc.voltageSettings(reset, threshVoltage, normIncrement, 
                             threshIncrement)
 
-    vs.instrument.write("*RST")
+    if not reset:
+        vc.rampVoltage(vs, 0)
  
     vc.runSetup(vs, targetVoltage, "2.5e-4")
 
@@ -134,7 +135,7 @@ def main(mppcList, extra=''):
         vc.rampVoltage(vs, 0)
 
     try:
-        vc.rampVoltage(vs, jumpTarget, 0)
+        vc.rampVoltage(vs, jumpTarget)
         vc.jumpVoltage(vs, 0)
 
         vs.instrument.write("*RST") # Reset all parameters now that safely ramped down
@@ -159,25 +160,17 @@ def main(mppcList, extra=''):
 
 if __name__ == '__main__':
     args = sys.argv
-    print("\nUnexpected error occurred while ramping to 0!!")
-    print("Please ramp down the device manually")
-    print("    To do so, press the \"Config/Local\" button and then use the")
-    print("    up and down arrow buttons in the \"V-SOURCE\" box, with gray")
-    print("    body colour and a white triangular arrow.")
-    print("")
-    print("    Change which digit to increment with the left and right arrow")
-    print("    buttons directly below them, with white body colour and gray")
-    print("    arrows.")
-    print("")
-    print("    Once safely ramped down, press the \"OPER\" button to switch")
-    print("    the voltage off.")
-    print("")
-    print("    DO NOT USE THE PURE WHITE \"RANGE\" BUTTONS!!!")
+
+    reset = True
+    if "--no-reset" in args:
+        reset = False
+        args.remove("--no-reset")
+
     if len(args) < 4 | len(args) > 5:
         print("python3 fullDaq.py n1 n2 n3 [label]")
         print("Add each mppc number in separate argument!")
         print("Additional label string is optional\n")
     if len(args) == 4:
-        main(args[1:4])
+        main(args[1:4], reset)
     else:
-        main(args[1:4], args[4])
+        main(args[1:4], reset, args[4])
