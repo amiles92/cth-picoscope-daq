@@ -89,9 +89,9 @@ def readData(f, d):
 
     return data
 
-def integrate(chData):
+def integrate(chData, chBaseline):
     dim = chData.shape
-    argMax = np.argmin(chData, axis=1, keepdims=True)
+    argMax = np.argmin(chData - chBaseline[:,np.newaxis], axis=1, keepdims=True)
 
     ind = np.indices(dim)[1]
 
@@ -99,26 +99,28 @@ def integrate(chData):
 
     return charge
 
-def gauss(x, mu, sigma, amp):
-    return 
+def baseline(chData):
+    return np.sum(chData[:,:100], axis=1)
 
-def sanityBool(file):
-    mean, std = main(file, False, False)
+def sanityBool(fileName, output=False, plot=False):
+    mean, std = main(fileName, plot=plot, output=output)
 
     return np.any(np.abs(mean) < 3 * np.abs(std))
 
 
-def main(file, plot=True, output=True):
+def main(fileName, plot=True, output=True):
 
-    with open(file, 'rb') as f:
+    with open(fileName, 'rb') as f:
         header = readHeader(f)
         data = readData(f, header)
 
     dims = (len(data), len(data[0]))
 
     chIntData = np.zeros(dims)
+    chBaseData = np.zeros(dims)
     for i, chData in enumerate(data):
-        chIntData[i] = (integrate(chData))
+        chBaseData[i] = baseline(chData)
+        chIntData[i] = integrate(chData, chBaseData[i])
     
     mean = np.mean(chIntData, axis=1)
     std = np.std(chIntData, axis=1)

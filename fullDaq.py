@@ -22,10 +22,6 @@ def initPicoScopes(picoList, fnGen):
 def daqPerBias(bias, mppcStr, mv50List, mv200List, date, pmt, d, extra):
 
     s = r'%s'
-
-    if extra != '':
-        extra = '_' + extra
-
     outFilePattern = d + r"%s_%sV_%s_%skV_%s%s" % \
                         (date, str(bias), s, pmt, mppcStr, extra)
     
@@ -88,13 +84,16 @@ def sanityCheck(bias, mppcStr, ledV, date, pmt, d, extra, picoscopes):
 
     ex = False
     for ps in picoscopes:
-        res = sc.sanityBool(out + "_" + ps)
+        res = sc.sanityBool(out + "_%s.dat" % ps.replace("/","-"), output=True)
         if not res:
             print("\nERROR: Issues present in Picoscope %s" % ps)
             ex = True
     
     if ex:
-        exit()
+        cont = input("Continue anyways? [y]/n")
+        if cont != '':
+            if cont[0].lower() == 'n':
+                return False
 
     return True
 
@@ -104,9 +103,11 @@ def main(mppcList, reset, extra=''):
 
     date = datetime.today().strftime('%Y-%m-%d')
 
-    directory = r'/media/cdc/MPPC-QC/QC-data'
+    directory = r'/media/cdc/MPPC-QC/QC-data/testing'
     mppcStr = "-".join(mppcList)
-    path = r"%s/%s/" % (directory, mppcStr)
+    if extra != '':
+        extra = '_' + extra
+    path = r"%s/%s%s/" % (directory, mppcStr, extra)
     os.makedirs(path, exist_ok=True) 
 
     picoscopes = ['IW098/0028','IW114/0004']
@@ -141,7 +142,8 @@ def main(mppcList, reset, extra=''):
                             threshIncrement)
 
     if not reset:
-        vc.rampVoltage(vs, 0)
+        vc.rampDown(vs, jumpTarget, 0)
+        vc.jumpVoltage(vs, 0)
         vs.instrument.write("*RST")
  
     vc.runSetup(vs, targetVoltage, "2.5e-4")
@@ -154,7 +156,12 @@ def main(mppcList, reset, extra=''):
 
     input("Ramp PMT then press enter to begin...")
 
-    sanityCheck(bias, mppcStr, 890, date, pmt, path, extra, picoscopes)
+    res = sanityCheck(bias, mppcStr, 890, date, pmt, path, extra, picoscopes)
+    if not res:
+        vc.rampVoltage(vs, jumpTarget)
+        vc.jumpVoltage(vs, 0)
+        vs.instrument.write("*RST")
+        exit()
 
     try:
         for bias in biasVoltageList:
