@@ -91,16 +91,17 @@ def readData(f, d):
 
 def integrate(chData, chBaseline):
     dim = chData.shape
-    argMax = np.argmin(chData - chBaseline[:,np.newaxis], axis=1, keepdims=True)
+    argMax = np.argmin(chData, axis=1, keepdims=True)
 
     ind = np.indices(dim)[1]
 
-    charge = np.sum(chData, axis=1, where=(ind > argMax - 2) & (ind < argMax + 2))
+    charge = np.sum(chData - chBaseline[:, np.newaxis], axis=1, 
+                    where=(ind > argMax - 10) & (ind < argMax + 40))
 
     return charge
 
 def baseline(chData):
-    return np.sum(chData[:,:100], axis=1)
+    return np.mean(chData[:,:100], axis=1)
 
 def sanityBool(fileName, output=False, plot=False):
     mean, std = main(fileName, plot=plot, output=output)
@@ -108,7 +109,9 @@ def sanityBool(fileName, output=False, plot=False):
     return np.any(np.abs(mean) < 3 * np.abs(std))
 
 
-def main(fileName, plot=True, output=True):
+def main(fileName, plot=True, output=True, show=True):
+
+    print("\n%s" % fileName)
 
     with open(fileName, 'rb') as f:
         header = readHeader(f)
@@ -130,17 +133,19 @@ def main(fileName, plot=True, output=True):
             print("Ch %s:" % chr(ord("A") + i), mean[i], chr(177), std[i])
     
     if plot:
+        fig, axes = plt.subplot(2,2)
+        fig.suptitle('/'.join(fileName.split("/")[-2:]))
         for i in range(dims[0]):
-            plt.figure()
-            plt.hist(chIntData[i], bins=100)
-        plt.show()
+            axes[i // 2][i % 2].hist(chIntData[i], bins=100)
+        if show: plt.show()
 
     return mean, std
 
 if __name__ == "__main__":
     args = sys.argv
-    if len(args) > 2:
-        print("python3 sanityCheck.py <file>")
-        print("Too many arguments. Only give one file")
+    if len(args) < 2:
+        print("python3 sanityCheck.py <file> ...")
         exit()
-    main(args[1])
+    for f in args[1:]:
+        main(f, show=False)
+    plt.show()
