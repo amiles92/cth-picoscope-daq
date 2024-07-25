@@ -1,5 +1,7 @@
+import os
 import sys
 from datetime import datetime
+import time
 import IV_Curve as vc
 import daq6000 as gen
 import daq6000a as daq
@@ -16,16 +18,14 @@ def initPicoScopes(picoList, fnGen):
         print("Python - Device not opened")
         exit()
 
-def daqPerBias(bias, mppcList, mv50List, mv200List, date, pmt='1.2', extra=''):
+def daqPerBias(bias, mppcStr, mv50List, mv200List, date, pmt='1.2', extra='', d='./data/'):
 
     s = r'%s'
 
     if extra != '':
         extra = '_' + extra
-    
-    mppcStr = "-".join(mppcList)
 
-    outFilePattern = r"./data/%s_%sV_%s_%skV_%s%s" % \
+    outFilePattern = d + r"%s_%sV_%s_%skV_%s%s" % \
                         (date, str(bias), s, pmt, mppcStr, extra)
     
     runDark(outFilePattern)
@@ -38,11 +38,11 @@ def daqPerBias(bias, mppcList, mv50List, mv200List, date, pmt='1.2', extra=''):
 
 def runDark(oFilePattern):
     daq.multiSeriesSetDaqSettings(
-                    0, 1, 1000,
-                    0, 1, 1000,
-                    0, 1, 1000,
-                    0, 1, 1000,
-                    100, 2, 20000, 0)
+                    0, 1, 2000,
+                    0, 1, 2000,
+                    0, 1, 2000,
+                    0, 1, 2000,
+                    100, 2, 5000, 0)
     
 
     gen.runFunctionGenerator(0,38)
@@ -69,23 +69,23 @@ def runMvList(vRange, oFilePatternRaw, mvList):
 
     return
 
-def main(mppcList, pmt):
+def main(mppcList, extra=''):
+
+    start = time.time()
 
     date = datetime.today().strftime('%Y-%m-%d')
+
+    directory = r'/media/cdc/MPPC-QC/QC-data'
+    mppcStr = "-".join(mppcList)
+    path = r"%s/%s/" % (directory, mppcStr)
+    os.makedirs(path, exist_ok=True) 
 
     picoscopes = ['IW098/0028','IW114/0004']
     fnGen = "GO024/040"
 
-    resetFlag = True
+    pmt = "1.2"
 
-    targetVoltage   = 83
-    normIncrement   = 2
-    threshVoltage   = 76
-    threshIncrement = 0.5
-
-    jumpTarget = 70
-
-    biasVoltageList = [82.5, 82, 81.5, 81, 80.5, 80, 79.5, 79, 78.5, 78]
+    biasVoltageList = [83, 82.5, 82, 81.5, 81, 80.5, 80, 79.5, 79, 78.5, 78]
 
     # bias voltage is key, first list if 50mV range, second list is 200mV
     ledVoltageMap = {83  : [[805, 810, 820],[840,870,890]],
@@ -101,10 +101,19 @@ def main(mppcList, pmt):
                      78  : [[805, 810, 820],[840,870,890]],
     }
 
+    resetFlag = True
+
+    targetVoltage   = biasVoltageList[0]
+    normIncrement   = 2
+    threshVoltage   = 76
+    threshIncrement = 0.5
+
+    jumpTarget = 70
+
     vs = vc.voltageSettings(resetFlag, threshVoltage, normIncrement, 
                             threshIncrement)
 
-    vs.instrument.write("*RST") # reset now that Voltage is definitely 0
+    vs.instrument.write("*RST")
  
     vc.runSetup(vs, targetVoltage, "2.5e-4")
 
@@ -120,7 +129,7 @@ def main(mppcList, pmt):
         for bias in biasVoltageList:
             vc.rampVoltage(vs, bias)
             mvLists = ledVoltageMap[bias]
-            daqPerBias(bias, mppcList, mvLists[0], mvLists[1], date, pmt=pmt)
+            daqPerBias(bias, mppcStr, mvLists[0], mvLists[1], date, d=path, pmt=pmt, extra=extra)
     except:
         vc.rampVoltage(vs, 0)
 
@@ -145,10 +154,30 @@ def main(mppcList, pmt):
         print("")
         print("    DO NOT USE THE PURE WHITE \"RANGE\" BUTTONS!!!")
         exit()
+    
+    print("Total elapsed time:", int(time.time() - start), "s")
 
 if __name__ == '__main__':
     args = sys.argv
-    if len(args) != 5:
-        print("python3 fullDaq.py n1 n2 n3 n4")
+    print("\nUnexpected error occurred while ramping to 0!!")
+    print("Please ramp down the device manually")
+    print("    To do so, press the \"Config/Local\" button and then use the")
+    print("    up and down arrow buttons in the \"V-SOURCE\" box, with gray")
+    print("    body colour and a white triangular arrow.")
+    print("")
+    print("    Change which digit to increment with the left and right arrow")
+    print("    buttons directly below them, with white body colour and gray")
+    print("    arrows.")
+    print("")
+    print("    Once safely ramped down, press the \"OPER\" button to switch")
+    print("    the voltage off.")
+    print("")
+    print("    DO NOT USE THE PURE WHITE \"RANGE\" BUTTONS!!!")
+    if len(args) < 4 | len(args) > 5:
+        print("python3 fullDaq.py n1 n2 n3 [label]")
         print("Add each mppc number in separate argument!")
-    main(args[1:4], args[4])
+        print("Additional label string is optional\n")
+    if len(args) == 4:
+        main(args[1:4])
+    else:
+        main(args[1:4], args[4])
