@@ -101,8 +101,6 @@ def main(mppcList, reset, extra=''):
                      78  : [[805, 810, 820],[840,870,890]],
     }
 
-    # resetFlag = True
-
     targetVoltage   = biasVoltageList[0]
     normIncrement   = 2
     threshVoltage   = 76
@@ -115,6 +113,7 @@ def main(mppcList, reset, extra=''):
 
     if not reset:
         vc.rampVoltage(vs, 0)
+        vs.instrument.write("*RST")
  
     vc.runSetup(vs, targetVoltage, "2.5e-4")
 
