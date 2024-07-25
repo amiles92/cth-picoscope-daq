@@ -3,6 +3,7 @@ import sys
 from datetime import datetime
 import time
 import IV_Curve as vc
+import sanityCheck as sc
 import daq6000 as gen
 import daq6000a as daq
 
@@ -18,7 +19,7 @@ def initPicoScopes(picoList, fnGen):
         print("Python - Device not opened")
         exit()
 
-def daqPerBias(bias, mppcStr, mv50List, mv200List, date, pmt='1.2', extra='', d='./data/'):
+def daqPerBias(bias, mppcStr, mv50List, mv200List, date, pmt, d, extra):
 
     s = r'%s'
 
@@ -32,9 +33,9 @@ def daqPerBias(bias, mppcStr, mv50List, mv200List, date, pmt='1.2', extra='', d=
 
     runMvList(2, outFilePattern, mv50List)
 
-    runMvList(4, outFilePattern, mv200List)
+    file = runMvList(4, outFilePattern, mv200List)
 
-    return
+    return file
 
 def runDark(oFilePattern):
     daq.multiSeriesSetDaqSettings(
@@ -67,7 +68,35 @@ def runMvList(vRange, oFilePatternRaw, mvList):
         print("\n\n\nNext DAQ: %s" % out)
         daq.multiSeriesCollectData(out)
 
-    return
+    return out
+
+def sanityCheck(bias, mppcStr, ledV, date, pmt, d, extra, picoscopes):
+
+    daq.multiSeriesSetDaqSettings(
+                    0, 4, 400,
+                    0, 4, 400,
+                    0, 4, 400,
+                    0, 4, 400,
+                    100, 2, 1000, 0)
+    
+    out = d + r"Check_%s_%sV_%s_%skV_%s%s" % \
+                (date, str(bias), ledV, pmt, mppcStr, extra)
+    
+    gen.runFunctionGenerator(ledV,38)
+    print("\n\n\nNext DAQ: %s" % out)
+    daq.multiSeriesCollectData(out)
+
+    ex = False
+    for ps in picoscopes:
+        res = sc.sanityBool(out + "_" + ps)
+        if not res:
+            print("\nERROR: Issues present in Picoscope %s" % ps)
+            ex = True
+    
+    if ex:
+        exit()
+
+    return True
 
 def main(mppcList, reset, extra=''):
 
@@ -125,11 +154,13 @@ def main(mppcList, reset, extra=''):
 
     input("Ramp PMT then press enter to begin...")
 
+    sanityCheck(bias, mppcStr, 890, date, pmt, path, extra, picoscopes)
+
     try:
         for bias in biasVoltageList:
             vc.rampVoltage(vs, bias)
             mvLists = ledVoltageMap[bias]
-            daqPerBias(bias, mppcStr, mvLists[0], mvLists[1], date, d=path, pmt=pmt, extra=extra)
+            daqPerBias(bias, mppcStr, mvLists[0], mvLists[1], date, pmt, path, extra)
     except:
         vc.rampVoltage(vs, 0)
 
