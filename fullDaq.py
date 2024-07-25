@@ -156,7 +156,7 @@ def main(mppcList, reset, extra=''):
 
     input("Ramp PMT then press enter to begin...")
 
-    res = sanityCheck(bias, mppcStr, 890, date, pmt, path, extra, picoscopes)
+    res = sanityCheck(targetVoltage, mppcStr, 890, date, pmt, path, extra, picoscopes)
     if not res:
         vc.rampVoltage(vs, jumpTarget)
         vc.jumpVoltage(vs, 0)
