@@ -103,10 +103,10 @@ def integrate(chData, chBaseline):
 def baseline(chData):
     return np.mean(chData[:,:100], axis=1)
 
-def sanityBool(fileName, output=False, plot=False):
-    mean, std = main(fileName, plot=plot, output=output)
+def sanityBool(fileName, output=False, plot=False, show=False):
+    mean, std = main(fileName, plot=plot, output=output, show=show)
 
-    return np.any(np.abs(mean[:3]) < 2000) or (np.abs(mean[3]) < 50)
+    return not (np.any(np.abs(mean[:3]) < 2000) or (np.abs(mean[3]) < 50))
 
 
 def main(fileName, plot=True, output=True, show=True):
@@ -133,7 +133,7 @@ def main(fileName, plot=True, output=True, show=True):
             print("Ch %s:" % chr(ord("A") + i), mean[i], chr(177), std[i])
     
     if plot:
-        fig, axes = plt.subplot(2,2)
+        fig, axes = plt.subplots(2,2)
         fig.suptitle('/'.join(fileName.split("/")[-2:]))
         for i in range(dims[0]):
             axes[i // 2][i % 2].hist(chIntData[i], bins=100)
