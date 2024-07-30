@@ -1,7 +1,8 @@
 **/.vscode*
 *.so
-*.dat
-*.exe
-*.pdf
-plots/*
-npys/*
+*.txt
+npys/
+plots/
+pre-analysed_root_files/
+exec/analysis
+exec/*.txt
