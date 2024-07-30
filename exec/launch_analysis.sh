@@ -2,10 +2,21 @@
 
 what="${1}"
 
+#all_dates=('2024-07-25')
+#all_mppcs=('1-2-3' '4-5-6' '7-8-9' '10-1-2')
+
+#all_dates=('2024-07-23')
+#all_mppcs=('3-6-8')
+
+all_dates=('2024-07-30')
+all_mppcs=('1-2-3')
+
 ### Different configurations for differente analysis
 # maxPMT vs PMT V  and maxMPPC vs LED V
-max_dates=('2024-07-23')
-max_mppcs=('3-6-8')
+#max_dates=('2024-07-25')
+#max_mppcs=('1-2-3' '4-5-6' '7-8-9' '10-1-2')
+max_dates=('2024-07-30')
+max_mppcs=('1-2-3')
 # repetability 
 rep_dates=('2024-07-23')
 rep_mppcs=('1-2-3')
@@ -35,51 +46,58 @@ if [ ${what} == "pre-analyse" ]; then
 		cd ../../exec/
 		for mppcs in "${all_mppcs[@]}"
 		do
+			pre_analyse_input_dir=${pre_analyse_input_dir}${mppcs}"/"
 			./analysis ${what} ${date} ${mppcs} ${pre_analyse_input_dir} ${pre_analyse_output_dir}
 		done
 	done
 elif [ ${what} == "analyse" ]; then
-	read -p  "Which analysis do you want to perform: 'maxPMT-maxMPPC', 'repetability', 'position_dependency' or 'QC'? " analysis_type
+	read -p  "Which analysis do you want to perform: 'maxPMT-maxMPPC', 'reproducibility', 'position_dependency' or 'QC'? " analysis_type
 		if [ ${analysis_type} == "maxPMT-maxMPPC" ]; then
-			for date in "${all_dates[@]}"
+			for date in "${max_dates[@]}"
 			do
-				for mppcs in "${all_mppcs[@]}"
+				for mppcs in "${max_mppcs[@]}"
 				do
-					./analysis ${what} ${analysis_type} ${date} ${mppcs} ${input} ${output}
+					./analysis ${what} ${analysis_type} ${date} ${mppcs} ${analyse_input_dir} ${analyse_output_dir}
 				done
 			done
-		elif [ ${analysis_type} == "repetability" ];then
-			for date in "${all_dates[@]}"
+		elif [ ${analysis_type} == "reproducibility" ];then 
+			echo "Sorry this is not supported yet..." ### To be removed onece done
+			break
+			for date in "${rep_dates[@]}"
 			do
-				for mppcs in "${all_mppcs[@]}"
+				for mppcs in "${rep_mppcs[@]}"
 				do
-					./analysis ${what} ${analysis_type} ${date} ${mppcs} ${input} ${output}
+					./analysis ${what} ${analysis_type} ${date} ${mppcs} ${analyse_input_dir} ${analyse_output_dir}
 				done
 			done
 		elif [ ${analysis_type} == "position_dependency" ];then
-			for date in "${all_dates[@]}"
+			echo "Sorry this is not supported yet..." ### To be removed onece done
+			break
+			for date in "${pos_dates[@]}"
 			do
-				for mppcs in "${all_mppcs[@]}"
+				for mppcs in "${pos_mppcs[@]}"
 				do
-					./analysis ${what} ${analysis_type} ${date} ${mppcs} ${input} ${output}
+					./analysis ${what} ${analysis_type} ${date} ${mppcs} ${analyse_input_dir} ${analyse_output_dir}
 				done
 			done
 		elif [ ${analysis_type} == "QC" ];then
+			echo "Sorry this is not supported yet..." ### To be removed onece done
+			break
 			if [! -f ${dates_file}];then
 				rm  -rf ${dates_file}
 			fi
-			for date in "${all_dates[@]}"
+			for date in "${qc_dates[@]}"
 			do
 				${date} >> ${dates_file}
 			done
 			if [! -f ${mppcs_file}];then
 				rm  -rf ${mppcs_file}
 			fi
-			for mppcs in "${all_mppcs[@]}"
+			for mppcs in "${qc_mppcs[@]}"
 			do
 				${mppcs} >> ${mppcs_file}
 			done
-			./analysis ${what} ${analysis_type} ${dates_file} ${mppcs_file} ${input} ${output}
+			./analysis ${what} ${analysis_type} ${dates_file} ${mppcs_file} ${analyse_input_dir} ${analyse_output_dir}
 		else
 			echo "ERROR: please choose among the given possibilities..."
 		fi
