@@ -9,3 +9,5 @@
 *.pdf
 plots/*
 npys/*
+pre-analysed_root_files/
+exec/analysis
