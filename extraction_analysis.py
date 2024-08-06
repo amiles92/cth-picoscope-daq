@@ -22,7 +22,7 @@ windowlow, windowhigh = 10, 50
 nplots = 100
 timeBase = 0.8
 numSigmaBaseline = -10
-inputDirectory = "../data-files/"
+inputDirectory = "../DAQ_C/data/"
 
 ### analysis
 nbins = 200
@@ -251,6 +251,7 @@ def getTimebase(f, d):
 ###############################################################################  
  
 def histogramming (d, numBins):
+
     binWidth = len(d) * 1.0 / numBins
     data = []
     xAxis = 0
@@ -267,6 +268,7 @@ def histogramming (d, numBins):
         count += 1
         #value /= binWidth
     data.append(value)
+
     return data
   
 def moving_average(d, n, i1, i2):
@@ -317,6 +319,7 @@ def plotting_plot (d, plotTitle, xLabel, yLabel, showing, ls='-'):
     plt.ylabel(yLabel)
     plt.title(plotTitle)
     if showing ==  0:
+
     	plt.show()
     plt.close()
     return fig
@@ -337,7 +340,9 @@ def plotting_plots (D, plotTitle, xLabel, yLabel, showing, nplots, ls='.'):
     plt.close()
     return fig
     
-def plotting_hist (d, numBins, plotTitle, xLabel, yLabel, showing):
+
+def plotting_hist(d, numBins, plotTitle, xLabel, yLabel, showing):
+
     fig = plt.figure()
     plt.hist(d, numBins)
     plt.xlabel(xLabel)

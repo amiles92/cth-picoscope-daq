@@ -1,5 +1,7 @@
+import sys
 import numpy as np
 import matplotlib.pyplot as plt
+from scipy.optimize import curve_fit
 
 ps6000VRanges = [10, 20, 50, 100, 200, 500, 1000, 2000, 5000, 
                  10000, 20000, 50000]
@@ -87,25 +89,63 @@ def readData(f, d):
 
     return data
 
-outFile = r"./data/08Jul24_81V_900mV_0kV_3-6-8_IW098-0028.dat"
+def integrate(chData, chBaseline):
+    dim = chData.shape
+    argMax = np.argmin(chData, axis=1, keepdims=True)
 
-f = open(outFile, 'rb')
+    ind = np.indices(dim)[1]
 
-header = readHeader(f)
+    charge = np.sum(chData - chBaseline[:, np.newaxis], axis=1, 
+                    where=(ind > argMax - 10) & (ind < argMax + 40))
 
-data = readData(f, header)
+    return charge
 
-for chData in data:
-    print(np.max(chData))
-    print(np.shape(chData))
+def baseline(chData):
+    return np.mean(chData[:,:100], axis=1)
 
-plt.figure()
-for i in range(100):
-    plt.plot(data[0][i], alpha=0.2)
-plt.figure()
-for i in range(100):
-    plt.plot(data[1][i], alpha=0.2)
-plt.figure()
-for i in range(100):
-    plt.plot(data[2][i], alpha=0.2)
-plt.show()
+def sanityBool(fileName, output=False, plot=False, show=False):
+    mean, std = main(fileName, plot=plot, output=output, show=show)
+
+    return not (np.any(np.abs(mean[:3]) < 2000) or (np.abs(mean[3]) < 50))
+
+
+def main(fileName, plot=True, output=True, show=True):
+
+    print("\n%s" % fileName)
+
+    with open(fileName, 'rb') as f:
+        header = readHeader(f)
+        data = readData(f, header)
+
+    dims = (len(data), len(data[0]))
+
+    chIntData = np.zeros(dims)
+    chBaseData = np.zeros(dims)
+    for i, chData in enumerate(data):
+        chBaseData[i] = baseline(chData)
+        chIntData[i] = integrate(chData, chBaseData[i])
+    
+    mean = np.mean(chIntData, axis=1)
+    std = np.std(chIntData, axis=1)
+
+    if output:
+        for i in range(dims[0]):
+            print("Ch %s:" % chr(ord("A") + i), mean[i], chr(177), std[i])
+    
+    if plot:
+        fig, axes = plt.subplots(2,2)
+        fig.suptitle('/'.join(fileName.split("/")[-2:]))
+        for i in range(dims[0]):
+            axes[i // 2][i % 2].hist(chIntData[i], bins=100)
+        if show: plt.show()
+
+    return mean, std
+
+if __name__ == "__main__":
+    args = sys.argv
+    if len(args) < 2:
+        print("python3 sanityCheck.py <file> ...")
+        exit()
+    for f in args[1:]:
+        main(f, show=False)
+    plt.show()
