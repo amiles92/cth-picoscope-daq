@@ -1,9 +1,7 @@
 **/.vscode*
 *.so
-*.txt
 *.pdf
 npys/
 plots/
 pre-analysed_root_files/
 exec/analysis
-exec/*.txt
