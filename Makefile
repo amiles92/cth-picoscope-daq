@@ -4,7 +4,7 @@ INC=$(shell pybind11-config --includes) -I$(shell pwd)/include -I/opt/picoscope/
 LIB=$(shell python3-config --ldflags) -L/opt/picoscope/lib
 FLAGS=-fPIC -shared
 SRC=$(shell pwd)/src
-SUF=$(shell python3-config --extenstion-suffix)
+SUF=$(shell python3-config --extension-suffix)
 
 default: main
 
