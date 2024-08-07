@@ -4,7 +4,11 @@ INC=$(shell pybind11-config --includes) -I$(shell pwd)/include -I/opt/picoscope/
 LIB=$(shell python3-config --ldflags) -L/opt/picoscope/lib
 FLAGS=-fPIC -shared
 SRC=$(shell pwd)/src
+<<<<<<< HEAD
 SUF=$(shell python3-config --extension-suffix)
+=======
+SUF=$(shell python3-config --extenstion-suffix)
+>>>>>>> 459cad7 (Cleaning up and small changes)
 
 ROOTINC=-I$(shell root-config --incdir)
 ROOTLIB=$(shell root-config --libs)
@@ -19,8 +23,8 @@ default: main
 main:
 	g++ $(FLAGS) $(INC) $(LIB) $(SRC)/libps6000/daq6000.cpp $(SRC)/libps6000/ps6000Wrapper.cpp -lps6000 -o daq6000$(SUF)
 	g++ $(FLAGS) $(INC) $(LIB) $(SRC)/libps6000a/daq6000a.cpp $(SRC)/libps6000a/ps6000aWrapper.cpp -lps6000a -o daq6000a$(SUF)
-	### LEAVE SOURCE FILE AT THE BEGINNING !!!
-	g++ $(SRC)/analysis/*.cpp $(ANALYSISFLAGS) $(ANALYSISINC) $(ANALYSISLIB) -o analysis.exe
+	### LEAVE SOURCE FILE AT THE BEGINNING OTHERWISE IT DOES NOT WORK !!!
+	g++ $(SRC)/analysis/*.cpp $(ANALYSISFLAGS) $(ANALYSISINC) $(ANALYSISLIB) -o exec/analysis
 
 clean:
 	rm -r *$(SUF)
