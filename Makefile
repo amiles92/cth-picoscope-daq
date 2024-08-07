@@ -4,11 +4,7 @@ INC=$(shell pybind11-config --includes) -I$(shell pwd)/include -I/opt/picoscope/
 LIB=$(shell python3-config --ldflags) -L/opt/picoscope/lib
 FLAGS=-fPIC -shared
 SRC=$(shell pwd)/src
-<<<<<<< HEAD
 SUF=$(shell python3-config --extension-suffix)
-=======
-SUF=$(shell python3-config --extenstion-suffix)
->>>>>>> 459cad7 (Cleaning up and small changes)
 
 ROOTINC=-I$(shell root-config --incdir)
 ROOTLIB=$(shell root-config --libs)
