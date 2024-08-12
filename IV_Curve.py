@@ -6,6 +6,7 @@ Created on Thu Jul 18 16:10:02 2024
 """
 
 import sys
+import os
 import argparse
 import pyvisa as visa
 import time
@@ -354,6 +355,7 @@ def main(args, currentLimitStr, currentRangeStr):
     if args['ivSettings'] != None:
 
         directory =  "./data/IV_Curves/"
+        os.makedirs(directory, exist_ok=True)
         fileName, numMeasurements, trigDelay = args['ivSettings']
 
         vs = voltageSettings(resetFlag, threshVoltage, normIncrement, 

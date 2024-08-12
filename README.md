@@ -44,3 +44,7 @@
   make
   ```
   Hope that worked
+
+### Documentation for fullDaq.py
+
+  Usage documentation is available [here](https://docs.google.com/document/d/1bO7mmGigRIAl0k5rsDep0J5nz4fyK3EAK_bv9pZOlq8/edit?usp=drive_link) (WIP) and is visible to anyone
