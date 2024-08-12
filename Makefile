@@ -24,4 +24,5 @@ main:
 
 clean:
 	rm -r *$(SUF)
+	rm exec/analysis
 
