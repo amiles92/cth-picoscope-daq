@@ -8,48 +8,42 @@ what="${1}"
 #all_dates=('2024-07-23')
 #all_mppcs=('3-6-8')
 
-all_dates=('2024-07-30')
+all_dates=('2024-07-25')
 all_mppcs=('1-2-3')
 
 ### Different configurations for differente analysis
 # maxPMT vs PMT V  and maxMPPC vs LED V
 #max_dates=('2024-07-25')
 #max_mppcs=('1-2-3' '4-5-6' '7-8-9' '10-1-2')
-max_dates=('2024-07-30')
+max_dates=('2024-07-25')
 max_mppcs=('1-2-3')
 # repetability 
-rep_dates=('2024-07-23')
+rep_dates=('2024-07-25')
 rep_mppcs=('1-2-3')
 # position dependency by cycling
-pos_dates=('2024-07-23')
+pos_dates=('2024-07-25')
 pos_mppcs=('1-2-3')
 # Quality Control
-qc_dates=('2024-07-23')
+qc_dates=('2024-07-25')
 qc_mppcs=('1-2-3' '4-5-6' '7-8-9' '10-1-2')
 dates_file="QC_dates.txt"
 mppcs_file="QC_mppcs.txt"
 
 ### For now the IV curve is totally independent
 
-pre_analyse_input_dir='/home/chadeau/Documents/codes/MPPC_QC/data-files/'
-pre_analyse_output_dir='/home/chadeau/Documents/codes/MPPC_QC/cth-picoscope-daq/'
-analyse_input_dir=${pre_analyse_output_dir}
-analyse_output_dir=${pre_analyse_output_dir}
+base_dir="/home/amiles/Documents/PhD/mppc-qc/"
 
-if [ ${what} == "pre-analyse" ]; then
-	for date in "${all_dates[@]}"
-	do
-		cd ../plots/pre-analyse/
-		if [ ! -d "${date}" ];then 
-			mkdir ${date}
-		fi
-		cd ../../exec/
-		for mppcs in "${all_mppcs[@]}"
-		do
-			pre_analyse_input_dir=${pre_analyse_input_dir}${mppcs}"/"
-			./analysis ${what} ${date} ${mppcs} ${pre_analyse_input_dir} ${pre_analyse_output_dir}
-		done
-	done
+pre_analyse_input_dir="${base_dir}data/"
+pre_analyse_output_dir="${base_dir}pre-analyse/"
+analyse_input_dir=${pre_analyse_output_dir}
+analyse_output_dir="${base_dir}plots/analyse/"
+
+if [ ${what} == "batch-pre-analyse" ]; then
+	# pre_analyse_input_dir=${pre_analyse_input_dir}${mppcs}"/"
+	# ./analysis ${what} ${date} ${mppcs} ${pre_analyse_input_dir} ${pre_analyse_output_dir}
+	# files=$(ls ${pre_analyse_input_dir}*/*.dat)
+	files="/home/amiles/Documents/PhD/mppc-qc/data/30Jul24/1-2-3/2024-07-30_78.5V_*mV_1.4kV_1-2-3_IW114-0004.dat"
+	./analysis ${what} ${pre_analyse_output_dir} ${files} # ${pre_analyse_input_dir}*/*.dat
 elif [ ${what} == "analyse" ]; then
 	read -p  "Which analysis do you want to perform: 'maxPMT-maxMPPC', 'reproducibility', 'position_dependency' or 'QC'? " analysis_type
 		if [ ${analysis_type} == "maxPMT-maxMPPC" ]; then

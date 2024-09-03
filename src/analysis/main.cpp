@@ -9,18 +9,33 @@ bool isExisting(const std::string &name)
 	return (access(name.c_str(), F_OK) != -1);
 }
 
-std::vector<std::string> stringComponents(const std::string &name)
+std::vector<std::string> stringComponents(const std::string &name, const char delim = '_')
 {
-	std::string stringToDecompose(name), delimiter("_");
-	std::vector<std::string> components;
-	size_t pos(0);
-	while ((pos = stringToDecompose.find(delimiter)) != std::string::npos)
+	std::stringstream ss(name);
+	std::string tmp;
+	std::vector<std::string> outVec;
+	while (std::getline(ss, tmp, delim))
 	{
-		std::string stringPart(stringToDecompose.substr(0, pos));
-		components.push_back(stringPart);
-		stringToDecompose.erase(0, pos + delimiter.length());
+		outVec.push_back(tmp);
 	}
-	return components;
+	return outVec;
+}
+
+std::string combineComponents(const std::string delim, const std::vector<std::string> strings)
+{
+	if (strings.size() == 0)
+		return "";
+
+	std::string outString;
+	std::stringstream ss;
+	ss << strings.at(0);
+	for (uint i0 = 1 ; i0 < strings.size() ; i0++)
+	{
+		ss << delim;
+		ss << strings.at(i0);
+	}
+	ss >> outString;
+	return outString;
 }
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -114,9 +129,16 @@ dataHeader readHeader(std::ifstream &f)
 	dataHeader d;
 	int nCh(4);
 	char b;
+	int numActive(0);
 	f.read(&b, 1);
 	d.timebase = b >> 4;
 	d.activeChannels = byteBin(b).substr(4);
+
+	for (char c : d.activeChannels)
+		if (c == '1') 
+			numActive++;
+	d.numActive = numActive;
+
 	d.activeTriggers = byteBin(f.get()).substr(3);
 	d.auxTriggerThreshold = adc2mv(bytesTwos(f, 2), 6);
 	for (int i0(0); i0 < nCh; ++i0)
@@ -143,23 +165,25 @@ dataHeader readHeader(std::ifstream &f)
 void printHeader(const dataHeader &header)
 {
 	int nCh(4);
+
 	std::cout << "Header Information:\n";
 	std::cout << "timebase:             " << header.timebase << std::endl;
 	std::cout << "activeChannels:       " << header.activeChannels << std::endl;
 	std::cout << "activeTriggers:       " << header.activeTriggers << std::endl;
 	std::cout << "auxTriggerThreshold:  " << header.auxTriggerThreshold << std::endl;
-	std::cout << "preTriggerSamples:    " << header.preTriggerSamples  << std::endl;
-	std::cout << "numWaveforms:         " << header.numWaveforms  << std::endl;
-	std::cout << "timestamp:            " << header.timestamp  << std::endl;
-	std::cout << "modelNumber:          " << header.modelNumber  << std::endl;
-	std::cout << "serialNumber:         " << header.serialNumber  << std::endl;
-	for (int i0(0) ; i0 < nCh ; ++i0)
+	std::cout << "preTriggerSamples:    " << header.preTriggerSamples << std::endl;
+	std::cout << "numWaveforms:         " << header.numWaveforms << std::endl;
+	std::cout << "timestamp:            " << header.timestamp << std::endl;
+	std::cout << "modelNumber:          " << header.modelNumber << std::endl;
+	std::cout << "serialNumber:         " << header.serialNumber << std::endl;
+	for (int i0(0); i0 < nCh; ++i0)
 	{
-	std::cout << "\nChannel " << 'A' + i0 << std::endl;
-	std::cout << "chTriggerThreshold:   " << header.chTriggerThreshold.at(i0) << std::endl;
-	std::cout << "chVRanges:            " << header.chVRanges.at(i0) << std::endl;
-	std::cout << "chSamples:            " << header.chSamples.at(i0) << std::endl;
+		std::cout << "\nChannel " << (char) ('A' + i0) << std::endl;
+		std::cout << "chTriggerThreshold:   " << header.chTriggerThreshold.at(i0) << std::endl;
+		std::cout << "chVRanges:            " << header.chVRanges.at(i0) << std::endl;
+		std::cout << "chSamples:            " << header.chSamples.at(i0) << std::endl;
 	}
+	std::cout << "" << std::endl;
 }
 
 bool isLittleEndian()
@@ -229,7 +253,7 @@ int getNumSamples(dataHeader &d)
 	return numSamples;
 }
 
-double getTimeBase(dataHeader &d)
+double getTimebase(const dataHeader &d)
 {
 	double timebase(pow(2, d.timebase) * 0.2);
 	return timebase;
@@ -239,19 +263,21 @@ double getTimeBase(dataHeader &d)
 ///                         Pre-analysis functions                          ///
 ///////////////////////////////////////////////////////////////////////////////
 
-points getMinData(const std::vector<sample>& data)
+points getMinData(const std::vector<sample> &data)
 {
-    std::vector<sample> sortedData(data);
-    std::sort(sortedData.begin(), sortedData.end(), [](sample a, sample b)
-			{return a.voltage < b.voltage;});
-    double minimum = sortedData[0].voltage;
-    sortedData.clear();
-    std::vector<int> minimumIndexes;
-    for(int i0(0); i0<(int)data.size(); ++i0){
-    	if(data[i0].voltage == minimum){
-    		minimumIndexes.push_back(i0);
-    	}
-    }
+	std::vector<sample> sortedData(data);
+	std::sort(sortedData.begin(), sortedData.end(), [](sample a, sample b)
+			  { return a.voltage < b.voltage; });
+	double minimum = sortedData[0].voltage;
+	sortedData.clear();
+	std::vector<int> minimumIndexes;
+	for (int i0(0); i0 < (int)data.size(); ++i0)
+	{
+		if (data[i0].voltage == minimum)
+		{
+			minimumIndexes.push_back(i0);
+		}
+	}
 	points result{minimum, minimumIndexes};
 	return result;
 }
@@ -462,12 +488,12 @@ gaussParams baseLine(const std::vector<sample> &data,
 	return parameters;
 }
 
-double chargeIntegration(const std::vector<sample> &data,
-						 const int sampleNumber,
-						 const int windowLowerEdge,
-						 const int windowUpperEdge,
-						 const double timeBase,
-						 const double baseLineValue)
+double chargeIntegrationPeak(const std::vector<sample> &data,
+						 	 const int sampleNumber,
+						 	 const int windowLowerEdge,
+						 	 const int windowUpperEdge,
+						 	 const double timeBase,
+						 	 const double baseLineValue)
 {
 	double integratedCharge(0);
 	int lowerEdge(0), upperEdge(0);
@@ -498,6 +524,74 @@ double chargeIntegration(const std::vector<sample> &data,
 	return integratedCharge;
 }
 
+double chargeIntegrationFixed(const std::vector<sample> &data,
+						 	  const double timebase,
+						 	  const double baseline,
+							  const uint32_t lowerWindow,
+							  const uint32_t upperWindow)
+{
+	double integratedChargeRaw(0);
+	int lowerEdge(std::max((uint32_t) 0,lowerWindow));
+	int upperEdge(std::min((uint32_t) data.size(),upperWindow));
+	double totalBaseline(baseline * (upperEdge - lowerEdge));
+
+	for (int i0(lowerEdge) ; i0 <= upperEdge ; ++i0)
+	{
+		integratedChargeRaw += data.at(i0).voltage;
+	}
+
+	double integratedCharge((integratedChargeRaw - totalBaseline) * timebase);
+
+	return integratedCharge;
+}
+
+void getWaveformProperties(const std::vector<std::vector<sample>> &dataChannel,
+						   double* integratedChargeChannel,
+						   double* minimumTimeChannel,
+						   const double timebase,
+						   const uint32_t lowerWindow,
+						   const uint32_t upperWindow)
+{
+	for (uint i0(0) ; i0 < dataChannel.size() ; ++i0)
+	{
+		std::cout << "start her up" << std::endl;
+		std::cout << dataChannel.at(i0).size() << std::endl;
+		gaussParams baseLineValue(baseLine(dataChannel.at(i0), g_baselineLowerWindow, g_baselineUpperWindow));
+		double charge = chargeIntegrationFixed(dataChannel.at(i0), timebase, baseLineValue.mean, lowerWindow, upperWindow);
+		points minSample = getMinData(dataChannel.at(i0));
+
+		integratedChargeChannel[i0] = charge;
+		minimumTimeChannel[i0] = minSample.index.at(0) * timebase;
+		// XXX: Just getting the first one, maybe should change?
+	}
+}
+
+void processDataPreAnalysis(const dataHeader &header,
+							const std::vector<std::vector<std::vector<sample>>> &data,
+							double* outData,
+							const int wfs,
+							const uint32_t lowerWindow = g_integratedLowerWindow,
+							const uint32_t upperWindow = g_integratedUpperWindow)
+{
+	uint access = 0;
+	for (uint i0(0) ; i0 < header.activeChannels.length() ; ++i0)
+	{
+		if (header.activeChannels.at(i0) == '0')
+		{
+			continue;
+		}
+
+		double *outDataCh = outData + access * 2 * wfs;
+
+		std::cout << "Ch " << (char) ('A' + i0) << std::endl;
+
+		getWaveformProperties(data.at(access), outDataCh, outDataCh + wfs,
+							  getTimebase(header), lowerWindow, upperWindow);
+		
+		access++;
+	}
+}
+
 void plottingIntegratedCharge(const std::string fileNameBase,
 							  const std::vector<std::vector<std::vector<sample>>> &data,
 							  std::vector<std::vector<double>> &integratedChargeMatrix,
@@ -519,7 +613,7 @@ void plottingIntegratedCharge(const std::string fileNameBase,
 			points minimums(getMinData(data[i0][i1]));
 			for (int i2(0); i2 < (int)minimums.index.size(); ++i2)
 			{
-				double inteQ(chargeIntegration(data[i0][i1], minimums.index[i2], windowLowerEdge, windowUpperEdge, timeBase, baseLineValue.mean));
+				double inteQ(chargeIntegrationPeak(data[i0][i1], minimums.index[i2], windowLowerEdge, windowUpperEdge, timeBase, baseLineValue.mean));
 				if (inteQ < -1000000)
 				{
 					std::cout << "ERROR: index " << minimums.index[i2] << "/ pulse value " << data[i0][i1][minimums.index[i2]].voltage << " / lower and upper edge " << windowLowerEdge << " " << windowUpperEdge << " / baseline " << baseLineValue.mean << " mV / integrated charge " << inteQ << " mV" << std::endl;
@@ -809,6 +903,10 @@ void fillingAndSavingTree(const std::string fileNameBase,
 	file->Close();
 }
 
+///////////////////////////////////////////////////////////////////////////////
+///                         Analysis mode functions                         ///
+///////////////////////////////////////////////////////////////////////////////
+
 int preAnalyseFile(std::string directory, std::string filePath)
 {
 	std::string fileBaseExt = filePath.substr(filePath.find_last_of("/") + 1);
@@ -846,7 +944,7 @@ int preAnalyseFile(std::string directory, std::string filePath)
 	std::vector<std::vector<double>> integratedChargeMatrix(4, emptyVecDouble);
 
 	int nSamples(getNumSamples(header));
-	double timeBase(getTimeBase(header));
+	double timeBase(getTimebase(header));
 	int nBinsT(nSamples), nBinsV(50), nBinsMinimumTime(nSamples), nBinsPulseMinimum(200), nBinsIntegrated(200), nHalfAverage(10), windowLowerEdge(10), windowUpperEdge(50);
 
 	plottingFirstWaveforms(fileBasename, data, plots2D, nBinsT, nBinsV, nSamples, timeBase);
@@ -870,7 +968,8 @@ int preAnalyseFile(std::string directory, std::string filePath)
 	std::cout << "### ROOT file saved..." << std::endl;
 	std::cout << "###### Finished saving..." << std::endl;
 	endTime = clock();
-	std::cout << "###### Finished pre-analysis: " << (float)(endTime - startTime) / CLOCKS_PER_SEC << "s\n" << std::endl;
+	std::cout << "###### Finished pre-analysis: " << (float)(endTime - startTime) / CLOCKS_PER_SEC << "s\n"
+			  << std::endl;
 	return 0;
 }
 
@@ -888,6 +987,202 @@ void batchPreAnalysis(std::string directory, std::vector<std::string> files)
 	}
 }
 
+void darkPreAnalysis(std::string directory, std::string date, std::string mppcStr,
+					 std::vector<TTree *> forest)
+{
+	for (const std::string &bias : g_dcp.biasFullVec)
+	{
+		for (const std::string &pico : picoscopeNames)
+		{
+			std::vector<std::string> fileVec{date, bias + "V", "Dark", g_pmt, mppcStr, pico};
+			std::string fileBasename(combineComponents("_", fileVec));
+			std::string filePath(directory + "/" + fileBasename + ".dat");
+
+			std::cout << "### Next file: " << filePath << std::endl;
+
+			std::ifstream file(filePath, std::ios::binary);
+			if (!file.is_open())
+			{
+				std::cerr << "ERROR: can not open file." << std::endl;
+				continue;
+			}
+
+			std::cout << "###### Starting extraction..." << std::endl;
+			dataHeader header = readHeader(file);
+			if (showHeader == true)
+			{
+				printHeader(header);
+			}
+			std::vector<std::vector<std::vector<sample>>> data = readData(file, header);
+			file.close();
+			
+			const int wfs = (const int) header.numWaveforms;
+			const int elems = 4 * 2 * wfs;
+
+			double outData2D[4][2][wfs];
+			double (&outData1D)[elems] = reinterpret_cast<double(&)[elems]>(outData2D);
+
+			uint32_t numSamples(*max_element(header.chSamples.begin(), header.chSamples.end()));
+
+			std::cout << "###### Starting analysis..." << std::endl;
+
+			processDataPreAnalysis(header, data, outData1D, wfs, 0, numSamples); // XXX: different method for dark counting?
+
+			for (int i0(0) ; i0 < 4 ; ++i0)
+			{
+				if (header.activeChannels.at(i0) == '0')
+				{
+					continue;
+				}
+
+				std::string tmp = combineComponents("_", {bias, "Dark", pico});
+				const char *branchName = tmp.c_str();
+				char *leaflist;
+
+				asprintf(&leaflist, "%s[2][%i]/D", branchName, wfs);
+
+				forest.at(i0)->Branch(branchName, outData2D[i0], (const char *) leaflist); //	TODO: FINISH THIS
+				forest.at(i0)->Fill();
+			}
+		}
+	}
+}
+
+void runLedPreAnalysisFile(std::string filePath, std::string bias,
+	std::string led, std::string pico, std::vector<TTree *> forest)
+{
+	std::cout << "### Next file: " << filePath << std::endl;
+
+	std::ifstream file(filePath, std::ios::binary);
+	if (!file.is_open())
+	{
+		std::cerr << "ERROR: can not open file." << std::endl;
+		throw;
+	}
+
+	std::cout << "###### Starting extraction..." << std::endl;
+	dataHeader header = readHeader(file);
+	if (showHeader == true)
+	{
+		printHeader(header);
+	}
+	std::vector<std::vector<std::vector<sample>>> data = readData(file, header);
+	file.close();
+
+	const int wfs = (const int) header.numWaveforms;
+
+	double outData[4][2][wfs];
+
+	processDataPreAnalysis(header, data, &outData[0][0][0], wfs);
+
+	for (int i0(0) ; i0 < 4 ; ++i0)
+	{
+		if (header.activeChannels.at(i0) == '0')
+		{
+			continue;
+		}
+
+		const char *branchName = combineComponents("_", {bias, led, pico}).c_str();
+		char *leaflist;
+
+		asprintf(&leaflist, "%s[2][%i]/D", branchName, wfs);
+
+		forest.at(i0)->Branch(branchName, outData[i0], (const char *) leaflist); //	TODO: FINISH THIS
+		forest.at(i0)->Fill();
+	}
+}
+
+void ledPreAnalysis(std::string directory, std::string date, std::string mppcStr,
+					std::vector<TTree *> forest)
+{
+	for (const std::string &bias : g_dcp.biasFullVec)
+	{
+		for (const std::string &led : g_dcp.ledShortVec)
+		{
+			for (const std::string &pico : picoscopeNames)
+			{
+				std::vector<std::string> fileVec{date, bias + "V", led + "mV", g_pmt, mppcStr, pico};
+				std::string fileBasename(combineComponents("_", fileVec));
+				std::string filePath(directory + "/" + fileBasename + ".dat");
+
+				runLedPreAnalysisFile(filePath, bias, led, pico, forest);
+			}
+		}
+	}
+
+	for (const std::string &bias : g_dcp.biasFullVec)
+	{
+		for (const std::string &led : g_dcp.ledShortVec)
+		{
+			for (const std::string &pico : picoscopeNames)
+			{
+				std::vector<std::string> fileVec{date, bias, led, g_pmt, mppcStr, pico};
+				std::string fileBasename(combineComponents("_", fileVec));
+				std::string filePath(directory + "/" + fileBasename + ".dat");
+
+				runLedPreAnalysisFile(filePath, bias, led, pico, forest);
+			}
+		}
+	}
+}
+
+void preAnalyseFolder(std::string directory, std::string date, std::string outputDirectory)
+{
+	while (directory.back() == '/')
+	{
+		directory.pop_back();
+	}
+
+	if (isExisting(directory) != true)
+	{
+		std::cerr << "WARNING: the path '" + directory + "' does not exist..." << std::endl;
+		return;
+	}
+
+	std::string mppcStr = directory.substr(directory.find_last_of("/") + 1);
+	std::vector<std::string> mppcNotesVec = stringComponents(mppcStr, '_');
+	std::vector<std::string> mppcVec = stringComponents(mppcNotesVec.at(0), '-');
+	std::string outputFile = outputDirectory + "/" + mppcStr;
+
+	/* Structure of root files
+	 * header folder? - metadata
+	 * tree for mppc a/b/c and pmt
+	 * * Branch for each file with integrated charge...
+	 */
+
+	const char *mppcTitle = "Charateristics of MPPC ";
+	char *mppcBack;
+	char *mppcMiddle;
+	char *mppcFront;
+
+    asprintf(&mppcBack, "%s%s", mppcTitle, mppcVec.at(0).c_str());
+	asprintf(&mppcMiddle, "%s%s", mppcTitle, mppcVec.at(1).c_str());
+	asprintf(&mppcFront, "%s%s", mppcTitle, mppcVec.at(2).c_str());
+
+	TFile *file = TFile::Open((TString)outputFile + ".root", "RECREATE");
+
+	TTree *treeBack = new TTree("mppc-back", mppcBack);
+	TTree *treeMiddle = new TTree("mppc-middle", mppcMiddle);
+	TTree *treeFront = new TTree("mppc-front", mppcFront);
+	TTree *treePmt = new TTree("pmt", "Charateristics of PMT");
+	// tree->Branch("channel", &channel, "channel/I");
+	std::vector<TTree *> forest{treeBack, treeMiddle, treeFront, treePmt};
+
+	// TODO: Header/metadata info
+
+	darkPreAnalysis(directory, date, mppcStr, forest);
+
+	ledPreAnalysis(directory, date, mppcStr, forest);
+
+	// populate trees with branches per file input
+
+	treeBack->Write();
+	treeMiddle->Write();
+	treeFront->Write();
+	treePmt->Write();
+	file->Close();
+}
+
 ///////////////////////////////////////////////////////////////////////////////
 ///                              Main function                              ///
 ///////////////////////////////////////////////////////////////////////////////
@@ -896,15 +1191,32 @@ int main(int argc, char **argv)
 {
 	if (argc < 2)
 	{
-		std::cerr << "ERROR: you need at least 1 argument: 'pre-analyse' or 'analyse'..." << std::endl;
+		std::cerr << "ERROR: you need at least 1 argument: 'batch-pre-analyse', 'pre-analyse' or 'analyse'..." << std::endl;
 		return 1;
 	}
 	std::string analysisType(argv[1]);
-	if (analysisType == "pre-analyse")
+	if (analysisType == "batch-pre-analyse")
 	{
+		if (argc < 3)
+		{
+			std::cerr << "ERROR: you should have at least 3 parameters, please look in 'launch_analysis.sh'..." << std::endl;
+			return 1;
+		}
 		std::string outputDir(argv[2]);
 		std::vector<std::string> datFiles(argv + 3, argv + argc);
 		batchPreAnalysis(outputDir, datFiles);
+	}
+	else if (analysisType == "pre-analyse")
+	{
+		if (argc != 5)
+		{
+			std::cerr << "ERROR: you should have 4 parameters, please look in 'launch_analysis.sh'..." << std::endl;
+			return 1;
+		}
+		std::string inputDir(argv[2]);
+		std::string date(argv[3]);
+		std::string outputDir(argv[4]);
+		preAnalyseFolder(inputDir, date, outputDir);
 	}
 	else if (analysisType == "analyse")
 	{
