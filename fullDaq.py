@@ -20,20 +20,21 @@ def initPicoScopes(picoList, fnGen):
         exit()
 
 def daqPerBias(bias, mppcStr, mv50List, mv200List, date, pmt, d, extra):
-
+    """Runs DAQ for a range of LED Voltages for a given bias voltage"""
     s = r'%s'
     outFilePattern = d + r"%s_%sV_%s_%skV_%s%s" % \
                         (date, str(bias), s, pmt, mppcStr, extra)
     
     runDark(outFilePattern)
 
-    runMvList(2, outFilePattern, mv50List)
+    runMvList(2, outFilePattern, mv50List, 1) # 20 mV PMT range for low light
 
-    file = runMvList(4, outFilePattern, mv200List)
+    runMvList(4, outFilePattern, mv200List)
 
-    return file
+    return
 
 def runDark(oFilePattern):
+    """Runs DAQ for dark photos: no LED, very low voltage range"""
     daq.multiSeriesSetDaqSettings(
                     0, 1, 2000,
                     0, 1, 2000,
@@ -48,13 +49,13 @@ def runDark(oFilePattern):
     daq.multiSeriesCollectData(out)
     return
 
-def runMvList(vRange, oFilePatternRaw, mvList):
-
+def runMvList(vRange, oFilePatternRaw, mvList, pmtVRange=2):
+    """Runs DAQ for range of LED voltages for a given bias and voltage range"""
     daq.multiSeriesSetDaqSettings(
                     0, vRange, 400,
                     0, vRange, 400,
                     0, vRange, 400,
-                    0, vRange, 400,
+                    0, pmtVRange, 400, # 50mV is good for all, may want to reduce it for mv50List
                     100, 2, 20000, 0)
 
     oFilePattern = oFilePatternRaw % ("%imV")
@@ -64,15 +65,20 @@ def runMvList(vRange, oFilePatternRaw, mvList):
         print("\n\n\nNext DAQ: %s" % out)
         daq.multiSeriesCollectData(out)
 
-    return out
+    return
 
 def sanityCheck(bias, mppcStr, ledV, date, pmt, d, extra, picoscopes):
+    """
+    Runs short DAQ with high LED and bias to check if the signals seem reasonable.
 
+    Specific values are hard coded in sanityCheck.py. It will halt if the value
+    is low, but can be continued or killed if it fails.
+    """
     daq.multiSeriesSetDaqSettings(
                     0, 4, 400,
                     0, 4, 400,
                     0, 4, 400,
-                    0, 4, 400,
+                    0, 2, 400,
                     100, 2, 1000, 0)
     
     out = d + r"Check_%s_%sV_%s_%skV_%s%s" % \
@@ -113,7 +119,7 @@ def main(mppcList, reset, extra=''):
     picoscopes = ['IW098/0028','IW114/0004']
     fnGen = "GO024/040"
 
-    pmt = "1.2"
+    pmt = "1.4"
 
     biasVoltageList = [83, 82.5, 82, 81.5, 81, 80.5, 80, 79.5, 79, 78.5, 78]
 
@@ -199,13 +205,16 @@ if __name__ == '__main__':
     args = sys.argv
 
     reset = True
-    if "--no-reset" in args:
+    if "--crashed" in args:
         reset = False
-        args.remove("--no-reset")
+        args.remove("--crashed")
 
     if len(args) < 4 | len(args) > 5:
         print("python3 fullDaq.py n1 n2 n3 [label]")
         print("Add each mppc number in separate argument!")
+        print("  n1 = Channel A and is furthest in enclosure")
+        print("  n2 = Channel B and is middle in enclosure")
+        print("  n3 = Channel C and is closest in enclosure")
         print("Additional label string is optional\n")
     if len(args) == 4:
         main(args[1:4], reset)
