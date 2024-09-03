@@ -210,7 +210,7 @@ if __name__ == '__main__':
         args.remove("--crashed")
 
     if len(args) < 4 | len(args) > 5:
-        print("python3 fullDaq.py n1 n2 n3 [label]")
+        print("python3 fullDaq.py n1 n2 n3 [label] [--crashed]")
         print("Add each mppc number in separate argument!")
         print("  n1 = Channel A and is furthest in enclosure")
         print("  n2 = Channel B and is middle in enclosure")
