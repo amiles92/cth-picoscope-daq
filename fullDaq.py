@@ -80,6 +80,7 @@ def sanityCheck(bias, mppcStr, ledV, date, pmt, d, extra, picoscopes):
     Specific values are hard coded in sanityCheck.py. It will halt if the value
     is low, but can be continued or killed if it fails.
     """
+    print("71")
     daq.multiSeriesSetDaqSettings(
                     0, 4, 400,
                     0, 4, 400,
@@ -87,12 +88,14 @@ def sanityCheck(bias, mppcStr, ledV, date, pmt, d, extra, picoscopes):
                     0, 2, 400,
                     100, 2, 1000, 0)
     
+    print("79")
     out = d + r"Check_%s_%sV_%s_%skV_%s%s" % \
                 (date, str(bias), ledV, pmt, mppcStr, extra)
     
     gen.runFunctionGenerator(ledV,38)
     print("\n\n\nNext DAQ: %s" % out)
     daq.multiSeriesCollectData(out)
+    print("86")
 
     ex = False
     for ps in picoscopes:
@@ -116,7 +119,7 @@ def main(mppcList, reset, extra=''):
 
     date = datetime.today().strftime('%Y-%m-%d')
 
-    directory = r'/media/cdc/MPPC-QC/QC-data/testing'
+    directory = r'/media/cdc/MPPC-QC/QC-data/test_2024sep'
     mppcStr = "-".join(mppcList)
     if extra != '':
         extra = '_' + extra
@@ -128,7 +131,6 @@ def main(mppcList, reset, extra=''):
     fnGen = "GO024/040"
 
     sc.g_picoscopes = picohyphen # so that quickPlot can find files properly
-
     pmt = "1.4"
 
     biasVoltageList = [83, 82.5, 82, 81.5, 81, 80.5, 80, 79.5, 79, 78.5, 78]
