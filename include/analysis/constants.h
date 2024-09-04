@@ -102,7 +102,7 @@ struct dataCollectionParameters
 
 const std::vector<int>
 	ps6000VRanges{10, 20, 50, 100, 200, 500, 1000, 2000, 5000, 10000, 20000, 50000};
-const bool showHeader(true);
+const bool showHeader(false);
 const bool doMovingAverage(false);
 const bool plotFirstWaveforms(false); // TODO: Implement this
 

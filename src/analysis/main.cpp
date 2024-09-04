@@ -532,7 +532,7 @@ double chargeIntegrationFixed(const std::vector<sample> &data,
 {
 	double integratedChargeRaw(0);
 	int lowerEdge(std::max((uint32_t) 0,lowerWindow));
-	int upperEdge(std::min((uint32_t) data.size(),upperWindow));
+	int upperEdge(std::min((uint32_t) data.size() - 1,upperWindow));
 	double totalBaseline(baseline * (upperEdge - lowerEdge));
 
 	for (int i0(lowerEdge) ; i0 <= upperEdge ; ++i0)
@@ -554,8 +554,6 @@ void getWaveformProperties(const std::vector<std::vector<sample>> &dataChannel,
 {
 	for (uint i0(0) ; i0 < dataChannel.size() ; ++i0)
 	{
-		std::cout << "start her up" << std::endl;
-		std::cout << dataChannel.at(i0).size() << std::endl;
 		gaussParams baseLineValue(baseLine(dataChannel.at(i0), g_baselineLowerWindow, g_baselineUpperWindow));
 		double charge = chargeIntegrationFixed(dataChannel.at(i0), timebase, baseLineValue.mean, lowerWindow, upperWindow);
 		points minSample = getMinData(dataChannel.at(i0));
@@ -583,7 +581,7 @@ void processDataPreAnalysis(const dataHeader &header,
 
 		double *outDataCh = outData + access * 2 * wfs;
 
-		std::cout << "Ch " << (char) ('A' + i0) << std::endl;
+		std::cout << "###### Analysing Channel " << (char) ('A' + i0) << std::endl;
 
 		getWaveformProperties(data.at(access), outDataCh, outDataCh + wfs,
 							  getTimebase(header), lowerWindow, upperWindow);
@@ -1035,16 +1033,18 @@ void darkPreAnalysis(std::string directory, std::string date, std::string mppcSt
 					continue;
 				}
 
-				std::string tmp = combineComponents("_", {bias, "Dark", pico});
-				const char *branchName = tmp.c_str();
+				std::string branchName = combineComponents("_", {bias, "Dark", pico});
 				char *leaflist;
 
-				asprintf(&leaflist, "%s[2][%i]/D", branchName, wfs);
+				asprintf(&leaflist, "data[2][%i]/D", wfs);
 
-				forest.at(i0)->Branch(branchName, outData2D[i0], (const char *) leaflist); //	TODO: FINISH THIS
+				forest.at(i0)->Branch(branchName.c_str(), outData2D[i0], (const char *) leaflist); //	TODO: FINISH THIS
 				forest.at(i0)->Fill();
 			}
-		}
+
+			std::cout << "###### Written branches to trees\n" << std::endl;
+			break; // XXX: TESTING BREAK
+		}break; // XXX: TESTING BREAK
 	}
 }
 
@@ -1082,14 +1082,16 @@ void runLedPreAnalysisFile(std::string filePath, std::string bias,
 			continue;
 		}
 
-		const char *branchName = combineComponents("_", {bias, led, pico}).c_str();
+		std::string branchName = combineComponents("_", {bias, led, pico});
 		char *leaflist;
 
-		asprintf(&leaflist, "%s[2][%i]/D", branchName, wfs);
+		asprintf(&leaflist, "data[%i]/D", 2 * wfs);
 
-		forest.at(i0)->Branch(branchName, outData[i0], (const char *) leaflist); //	TODO: FINISH THIS
+		forest.at(i0)->Branch(branchName.c_str(), outData[i0], (const char *) leaflist); //	TODO: FINISH THIS
 		forest.at(i0)->Fill();
 	}
+
+	std::cout << "###### Written branches to trees\n" << std::endl;
 }
 
 void ledPreAnalysis(std::string directory, std::string date, std::string mppcStr,
@@ -1106,23 +1108,27 @@ void ledPreAnalysis(std::string directory, std::string date, std::string mppcStr
 				std::string filePath(directory + "/" + fileBasename + ".dat");
 
 				runLedPreAnalysisFile(filePath, bias, led, pico, forest);
-			}
-		}
+
+				break; // XXX: TESTING BREAK
+			}break; // XXX: TESTING BREAK
+		}break; // XXX: TESTING BREAK
 	}
 
-	for (const std::string &bias : g_dcp.biasFullVec)
+	for (const std::string &bias : g_dcp.biasShortVec)
 	{
-		for (const std::string &led : g_dcp.ledShortVec)
+		for (const std::string &led : g_dcp.ledFullVec)
 		{
 			for (const std::string &pico : picoscopeNames)
 			{
-				std::vector<std::string> fileVec{date, bias, led, g_pmt, mppcStr, pico};
+				std::vector<std::string> fileVec{date, bias + "V", led + "mV", g_pmt, mppcStr, pico};
 				std::string fileBasename(combineComponents("_", fileVec));
 				std::string filePath(directory + "/" + fileBasename + ".dat");
 
 				runLedPreAnalysisFile(filePath, bias, led, pico, forest);
-			}
-		}
+
+				break; // XXX: TESTING BREAK
+			}break; // XXX: TESTING BREAK
+		}break; // XXX: TESTING BREAK
 	}
 }
 
@@ -1161,10 +1167,10 @@ void preAnalyseFolder(std::string directory, std::string date, std::string outpu
 
 	TFile *file = TFile::Open((TString)outputFile + ".root", "RECREATE");
 
-	TTree *treeBack = new TTree("mppc-back", mppcBack);
-	TTree *treeMiddle = new TTree("mppc-middle", mppcMiddle);
-	TTree *treeFront = new TTree("mppc-front", mppcFront);
-	TTree *treePmt = new TTree("pmt", "Charateristics of PMT");
+	TTree *treeBack = new TTree("treeBack", mppcBack);
+	TTree *treeMiddle = new TTree("treeMiddle", mppcMiddle);
+	TTree *treeFront = new TTree("treeFront", mppcFront);
+	TTree *treePmt = new TTree("treePmt", "Charateristics of PMT");
 	// tree->Branch("channel", &channel, "channel/I");
 	std::vector<TTree *> forest{treeBack, treeMiddle, treeFront, treePmt};
 
@@ -1176,11 +1182,15 @@ void preAnalyseFolder(std::string directory, std::string date, std::string outpu
 
 	// populate trees with branches per file input
 
+	std::cout << "### Writing trees to file\n" << std::endl;
+
 	treeBack->Write();
 	treeMiddle->Write();
 	treeFront->Write();
 	treePmt->Write();
 	file->Close();
+
+	std::cout << "### File closed" << std::endl;
 }
 
 ///////////////////////////////////////////////////////////////////////////////
