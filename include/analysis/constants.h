@@ -131,8 +131,8 @@ const dataCollectionParameters g_dcp{biasFullVec, ledFullVec, biasShortVec, ledS
 // Analysis parameters
 const uint32_t g_baselineLowerWindow = 0;
 const uint32_t g_baselineUpperWindow = 50;
-const uint32_t g_integratedLowerWindow = 160; // TODO: Modify to be fixed window, its currently 
-const uint32_t g_integratedUpperWindow = 210; // [peak - lower window, peak + upper window]
+const uint32_t g_integratedLowerWindow = 160;
+const uint32_t g_integratedUpperWindow = 210;
 
 // ROOT file branches variables
 TTree *tree;
