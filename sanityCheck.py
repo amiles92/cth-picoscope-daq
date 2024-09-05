@@ -1,10 +1,13 @@
 import sys
 import numpy as np
 import matplotlib.pyplot as plt
-from scipy.optimize import curve_fit
 
 ps6000VRanges = [10, 20, 50, 100, 200, 500, 1000, 2000, 5000, 
                  10000, 20000, 50000]
+
+plt.ion()
+g_fig = None
+g_picoscopes = None
 
 def byteBin(byte):
     return '{0:08b}'.format(ord(byte))
@@ -89,14 +92,29 @@ def readData(f, d):
 
     return data
 
+def readDataAdc(f, d):
+    
+    data = []
+
+    for ch in range(4):
+        if d['activeChannels'][ch] == '0':
+            continue
+        nWf = d['numWaveforms']
+        nSamples = d['ch' + chr(ord('A') + ch) + 'Samples']
+        chADCData = np.fromfile(f, dtype='>i2', count=nWf * nSamples).reshape((nWf,nSamples))
+
+        data.append(chADCData)
+
+    return data
+
 def integrate(chData, chBaseline):
     dim = chData.shape
-    argMax = np.argmin(chData, axis=1, keepdims=True)
+    argMin = np.argmin(chData, axis=1, keepdims=True)
 
     ind = np.indices(dim)[1]
 
     charge = np.sum(chData - chBaseline[:, np.newaxis], axis=1, 
-                    where=(ind > argMax - 10) & (ind < argMax + 40))
+                    where=(ind > argMin - 10) & (ind < argMin + 40))
 
     return charge
 
@@ -108,6 +126,42 @@ def sanityBool(fileName, output=False, plot=False, show=False):
 
     return not (np.any(np.abs(mean[:3]) < 2000) or (np.abs(mean[3]) < 50))
 
+def quickPlot(filePattern, nWfs=1000):
+    nWfs = int(nWfs)
+    if nWfs < 1:
+        nWfs = None # Pass 0 or negative num to print all wfs
+    
+    global g_fig
+
+    if g_fig != None:
+        g_fig.clf()
+    else:
+        g_fig = plt.figure()
+
+    axs = g_fig.subplots(2,2)
+
+    for ps in g_picoscopes:
+        fileName = filePattern % ps
+        with open(fileName, 'rb') as f:
+            header = readHeader(f)
+            data = readDataAdc(f, header)
+        
+        # for chData, ax in data, axs:
+        for i in range(4):
+            ch = chr(ord('A') + i)
+            chData, ax = data[i], axs[i // 2][i % 2]
+            minData = np.min(chData[:nWfs], axis=1, keepdims=True) # only take first 1000 wfs, might be faster?
+            nBins = np.round(np.max(minData) - np.min(minData)) // 256 + 1
+            ax.hist(minData // 256, bins=nBins, alpha=0.7, label=ps)
+            ax.set_title("Channel " + ch)
+
+    axs[1][1].legend()
+
+    plt.tight_layout()
+    plt.show()
+    plt.pause(0.001)
+
+    return
 
 def main(fileName, plot=True, output=True, show=True):
 

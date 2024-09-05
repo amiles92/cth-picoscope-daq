@@ -7,6 +7,10 @@ import sanityCheck as sc
 import daq6000 as gen
 import daq6000a as daq
 
+### GLOBAL FLAGS ###
+g_quickPlots = True
+####################
+
 def initPicoScopes(picoList, fnGen):
     for ps in picoList:
         status = daq.multiSeriesInitDaq(ps)
@@ -47,6 +51,7 @@ def runDark(oFilePattern):
     out = oFilePattern % "Dark"
     print("\n\n\nNext DAQ: %s" % out)
     daq.multiSeriesCollectData(out)
+    if g_quickPlots: sc.quickPlot(out + "_%s.dat")
     return
 
 def runMvList(vRange, oFilePatternRaw, mvList, pmtVRange=2):
@@ -64,6 +69,7 @@ def runMvList(vRange, oFilePatternRaw, mvList, pmtVRange=2):
         gen.runFunctionGenerator(mv,38)
         print("\n\n\nNext DAQ: %s" % out)
         daq.multiSeriesCollectData(out)
+        if g_quickPlots: sc.quickPlot(out + "_%s.dat")
 
     return
 
@@ -92,7 +98,8 @@ def sanityCheck(bias, mppcStr, ledV, date, pmt, d, extra, picoscopes):
     for ps in picoscopes:
         res = sc.sanityBool(out + "_%s.dat" % ps.replace("/","-"), output=True)
         if not res:
-            print("\nERROR: Issues present in Picoscope %s" % ps)
+            print("\nERROR: Possible issues present in Picoscope %s" % ps)
+            sc.quickPlot(out + "_%s.dat" % ps.replace("/","-"))
             ex = True
     
     if ex:
@@ -117,24 +124,27 @@ def main(mppcList, reset, extra=''):
     os.makedirs(path, exist_ok=True) 
 
     picoscopes = ['IW098/0028','IW114/0004']
+    picohyphen = [ps.replace('/','-') for ps in picoscopes]
     fnGen = "GO024/040"
+
+    sc.g_picoscopes = picohyphen # so that quickPlot can find files properly
 
     pmt = "1.4"
 
     biasVoltageList = [83, 82.5, 82, 81.5, 81, 80.5, 80, 79.5, 79, 78.5, 78]
 
     # bias voltage is key, first list if 50mV range, second list is 200mV
-    ledVoltageMap = {83  : [[805, 810, 820],[840,870,890]],
-                     82.5: [[805, 810, 820],[840,870,890]],
-                     82  : [[805, 810, 820],[840,870,890]],
-                     81.5: [[805, 810, 820],[840,870,890]],
-                     81  : [[805, 810, 820],[840,870,890]],
-                     80.5: [[805, 810, 820],[840,870,890]],
-                     80  : [[805, 810, 820],[840,870,890]],
-                     79.5: [[805, 810, 820],[840,870,890]],
-                     79  : [[805, 810, 820],[840,870,890]],
-                     78.5: [[805, 810, 820],[840,870,890]],
-                     78  : [[805, 810, 820],[840,870,890]],
+    ledVoltageMap = {83  : [[840],[880, 900]],
+                     82.5: [[840],[880, 900]],
+                     82  : [[840],[880, 900]],
+                     81.5: [[820, 840, 850],[880, 890, 900]],
+                     81  : [[820, 840, 850],[880, 890, 900]],
+                     80.5: [[820, 840, 850],[880, 890, 900]],
+                     80  : [[840],[880, 900]],
+                     79.5: [[840],[880, 900]],
+                     79  : [[840],[880, 900]],
+                     78.5: [[840],[880, 900]],
+                     78  : [[840],[880, 900]],
     }
 
     targetVoltage   = biasVoltageList[0]
@@ -151,14 +161,14 @@ def main(mppcList, reset, extra=''):
         vc.rampDown(vs, jumpTarget, 0)
         vc.jumpVoltage(vs, 0)
         vs.instrument.write("*RST")
+
+    initPicoScopes(picoscopes, fnGen)
  
     vc.runSetup(vs, targetVoltage, "2.5e-4")
 
     vc.jumpVoltage(vs, jumpTarget)
 
     vc.rampVoltage(vs, targetVoltage)
-
-    initPicoScopes(picoscopes, fnGen)
 
     input("Ramp PMT then press enter to begin...")
 
