@@ -94,5 +94,5 @@ elif [ ${what} == "analyse" ]; then
 			echo "ERROR: please choose among the given possibilities..."
 		fi
 else
-	echo "ERROR: choose between 'pre-analyse' and 'analyse'..."
+	echo "ERROR: choose between 'batch-pre-analyse' and 'analyse'..."
 fi
