@@ -31,7 +31,7 @@ mppcs_file="QC_mppcs.txt"
 
 ### For now the IV curve is totally independent
 
-base_dir="/home/amiles/Documents/PhD/mppc-qc/"
+base_dir="$HOME/Documents/PhD/mppc-qc/"
 
 pre_analyse_input_dir="${base_dir}data/"
 pre_analyse_output_dir="${base_dir}pre-analyse/"
@@ -39,11 +39,9 @@ analyse_input_dir=${pre_analyse_output_dir}
 analyse_output_dir="${base_dir}plots/analyse/"
 
 if [ ${what} == "batch-pre-analyse" ]; then
-	# pre_analyse_input_dir=${pre_analyse_input_dir}${mppcs}"/"
-	# ./analysis ${what} ${date} ${mppcs} ${pre_analyse_input_dir} ${pre_analyse_output_dir}
-	# files=$(ls ${pre_analyse_input_dir}*/*.dat)
-	files="/home/amiles/Documents/PhD/mppc-qc/data/30Jul24/1-2-3/2024-07-30_78.5V_*mV_1.4kV_1-2-3_IW114-0004.dat"
-	./analysis ${what} ${pre_analyse_output_dir} ${files} # ${pre_analyse_input_dir}*/*.dat
+	files=$(ls ${pre_analyse_input_dir}*/*.dat)
+	./analysis ${what} ${pre_analyse_output_dir} ${files}
+
 elif [ ${what} == "analyse" ]; then
 	read -p  "Which analysis do you want to perform: 'maxPMT-maxMPPC', 'reproducibility', 'position_dependency' or 'QC'? " analysis_type
 		if [ ${analysis_type} == "maxPMT-maxMPPC" ]; then
