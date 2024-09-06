@@ -1,3 +1,5 @@
+#ifndef DAQ6000WRAPPER
+#define DAQ6000WRAPPER
 #include <stdio.h>
 #include <stdint.h>
 #include <stdexcept>
@@ -17,15 +19,10 @@
 #include <sys/types.h>
 #include <unistd.h>
 #include <stdlib.h>
-#endif
-
-#ifndef PS6000API
 #include <libps6000/ps6000Api.h>
 #endif
 
-#ifndef PICO_STATUS
 #include <libps6000/PicoStatus.h>
-#endif
 
 typedef enum enBOOL{FALSE,TRUE} BOOL;
 
@@ -154,3 +151,4 @@ void ClearPulseGen(UNIT *unit);
 
 void PicoSquarePulseGen(UNIT *unit, uint32_t PeakValue, double Width);
 
+#endif

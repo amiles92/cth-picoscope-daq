@@ -1,3 +1,5 @@
+#ifndef DAQ6000AWRAPPER
+#define DAQ6000AWRAPPER
 #include <stdio.h>
 #include <stdint.h>
 #include <stdexcept>
@@ -17,15 +19,10 @@
 #include <sys/types.h>
 #include <unistd.h>
 #include <stdlib.h>
-#endif
-
-#ifndef PS6000API
 #include <libps6000a/ps6000aApi.h>
 #endif
 
-#ifndef PICO_STATUS
 #include <libps6000a/PicoStatus.h>
-#endif
 
 #define PS6000A_MAX_CHANNELS 8 //analog chs only
 
@@ -112,3 +109,5 @@ void PREF4 CallBackBlock(int16_t handle, PICO_STATUS status, void * pParameter);
 void PREF4 MultiCallBackBlock(int16_t handle, PICO_STATUS status, void *pParameter);
 
 int16_t mv_to_adc(int16_t mv, int16_t rangeIndex, UNIT *unit);
+
+#endif
