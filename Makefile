@@ -7,7 +7,7 @@ SRC=$(shell pwd)/src
 SUF=$(shell python3-config --extension-suffix)
 
 ROOTINC=-I$(shell root-config --incdir)
-ROOTLIB=$(shell root-config --libs)
+ROOTLIB=$(shell root-config --libs --glibs)
 ROOTFLAGS=$(shell root-config --cflags)
 
 ANALYSISINC=$(ROOTINC) -I$(shell pwd)/include/analysis

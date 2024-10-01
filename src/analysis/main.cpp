@@ -93,11 +93,11 @@ std::string bytesHex(std::ifstream &f,
 	return s;
 }
 
-int bytesTwos(std::ifstream &f,
-			  const int n)
+int64_t bytesTwos(std::ifstream &f,
+			  	  const int n)
 {
 	std::string hexStr(bytesHex(f, n));
-	int value(std::stoi(hexStr, nullptr, 16));
+	int64_t value(std::stoi(hexStr, nullptr, 16));
 	if (value & (1 << (n * 8 - 1)))
 	{
 		value -= 1 << (n * 8);
@@ -259,6 +259,79 @@ double getTimebase(const dataHeader &d)
 	return timebase;
 }
 
+environmentSample getSample(std::vector<environmentSample> &data, int32_t &timestamp)
+{
+	return *(std::min_element(data.begin(), data.end(), 
+		[&](environmentSample x, environmentSample y)
+	{
+		return std::abs(x.timestamp - timestamp) < std::abs(y.timestamp - timestamp);
+	}));
+}
+
+bool readEnvLine(const std::string line, environmentSample &s)
+{
+	std::vector<std::string> vecLineQuotes = stringComponents(line, ',');
+	std::vector<std::string> vecLine;
+	double secondsPerDay = 86400;
+	int daysBetween1900And1970 = 25569;
+	
+	for (std::string line : vecLineQuotes)
+	{
+		vecLine.push_back(line.substr(1, line.size() - 2));
+	}
+
+	std::vector<int> expectedValues = {1, 2, 3, 4};
+	for (int v : expectedValues) // NOTE: The last entry was incomplete, could be a problem
+	{
+		if (vecLine.at(v).empty()) 
+			return false;
+	}
+
+	double timestampDays = std::stod(vecLine.at(1));
+	int32_t timestamp = std::lround((timestampDays - daysBetween1900And1970) * secondsPerDay);
+
+	double temperature = std::stod(vecLine.at(2));
+	double humidity = std::stod(vecLine.at(3));
+	double pressure = std::stod(vecLine.at(4));
+
+	s = {timestamp, temperature, humidity, pressure};
+
+	return true;
+}
+
+std::vector<environmentSample> readEnvData(const std::string filePath)
+{
+	std::ifstream file(filePath);
+	std::string line;
+	std::vector<environmentSample> envData;
+
+	getline(file, line);
+	std::cout << "title: " << line << std::endl;
+
+	getline(file, line); // empty line
+	getline(file, line);
+	std::cout << "variables: " << line << std::endl;
+
+	getline(file, line);
+	if (line != "\"\",\"\",\"�C\",\"%RH\",\"hPa\",\"\",\"\",\"\",\"\",\"\"") // XXX: idk if this will work
+	{
+		std::cout << "Incorrect unit line!" << std::endl;
+		std::cout << "file units: " << line << std::endl;
+		std::cout << "hardcoded : \"\",\"\",\"�C\",\"%RH\",\"hPa\",\"\",\"\",\"\",\"\",\"\"" << std::endl;
+	}
+
+	while (getline(file, line))
+	{
+		environmentSample s;
+		if (readEnvLine(line, s))
+			envData.push_back(s);
+	}
+
+	file.close();
+
+	return envData;
+}
+
 ///////////////////////////////////////////////////////////////////////////////
 ///                         Pre-analysis functions                          ///
 ///////////////////////////////////////////////////////////////////////////////
@@ -299,6 +372,16 @@ points getMaxData(const std::vector<sample> &data)
 	}
 	points result{maximum, maximumIndexes};
 	return result;
+}
+
+sample getMinDataSingle(const std::vector<sample> &data)
+{
+	return *(std::min_element(data.begin(), data.end()));
+}
+
+sample getMaxDataSingle(const std::vector<sample> &data)
+{
+	return *(std::max_element(data.begin(), data.end()));
 }
 
 void plottingFirstWaveforms(const std::string fileNameBase,
@@ -546,8 +629,9 @@ double chargeIntegrationFixed(const std::vector<sample> &data,
 }
 
 void getWaveformProperties(const std::vector<std::vector<sample>> &dataChannel,
-						   double* integratedChargeChannel,
-						   double* minimumTimeChannel,
+						   Double_t* integratedChargeChannel,
+						   Double_t* minimumTimeChannel,
+						   Double_t* minimumVoltageChannel,
 						   const double timebase,
 						   const uint32_t lowerWindow,
 						   const uint32_t upperWindow)
@@ -555,23 +639,23 @@ void getWaveformProperties(const std::vector<std::vector<sample>> &dataChannel,
 	for (uint i0(0) ; i0 < dataChannel.size() ; ++i0)
 	{
 		gaussParams baseLineValue(baseLine(dataChannel.at(i0), g_baselineLowerWindow, g_baselineUpperWindow));
-		double charge = chargeIntegrationFixed(dataChannel.at(i0), timebase, baseLineValue.mean, lowerWindow, upperWindow);
-		points minSample = getMinData(dataChannel.at(i0));
+		Double_t charge = chargeIntegrationFixed(dataChannel.at(i0), timebase, baseLineValue.mean, lowerWindow, upperWindow);
+		// points minSample = getMinData(dataChannel.at(i0));
+		sample minSample = getMinDataSingle(dataChannel.at(i0));
 
 		integratedChargeChannel[i0] = charge;
-		minimumTimeChannel[i0] = minSample.index.at(0) * timebase;
+		minimumTimeChannel[i0] = minSample.time;
+		minimumVoltageChannel[i0] = minSample.voltage;
 		// XXX: Just getting the first one, maybe should change?
 	}
 }
 
-void processDataPreAnalysis(const dataHeader &header,
+void processLedPreAnalysis(const dataHeader &header,
 							const std::vector<std::vector<std::vector<sample>>> &data,
-							double* outData,
-							const int wfs,
+							Double_t* outData,
 							const uint32_t lowerWindow = g_integratedLowerWindow,
 							const uint32_t upperWindow = g_integratedUpperWindow)
 {
-	uint access = 0;
 	for (uint i0(0) ; i0 < header.activeChannels.length() ; ++i0)
 	{
 		if (header.activeChannels.at(i0) == '0')
@@ -579,14 +663,46 @@ void processDataPreAnalysis(const dataHeader &header,
 			continue;
 		}
 
-		double *outDataCh = outData + access * 2 * wfs;
+		const int wfs = header.numWaveforms;
+		Double_t *outDataCh = outData + i0 * 3 * wfs;
 
 		std::cout << "###### Analysing Channel " << (char) ('A' + i0) << std::endl;
 
-		getWaveformProperties(data.at(access), outDataCh, outDataCh + wfs,
+		getWaveformProperties(data.at(i0), outDataCh, outDataCh + wfs, outDataCh + 2 * wfs,
 							  getTimebase(header), lowerWindow, upperWindow);
-		
-		access++;
+	}
+}
+
+void processDarkPreAnalysis(const dataHeader &header,
+							const std::vector<std::vector<std::vector<sample>>> &data,
+							Double_t* outData)
+{
+	double timebase = getTimebase(header);
+
+	for (uint i0(0) ; i0 < header.activeChannels.length() ; ++i0)
+	{
+		if (header.activeChannels.at(i0) == '0')
+		{
+			continue;
+		}
+
+		uint32_t upperWindow = header.chSamples.at(i0);
+		const int wfs = header.numWaveforms;
+
+		Double_t *outDataCh = outData + i0 * wfs;
+		std::vector<std::vector<sample>> dataChannel = data.at(i0);
+
+		gaussParams baseLineValue(baseLine(dataChannel.at(i0), 0, dataChannel.size() - 1));
+
+		std::cout << "###### Analysing Channel " << (char) ('A' + i0) << std::endl;
+
+		for (uint i1(0) ; i1 < dataChannel.size() ; ++i1)
+		{
+			// Double_t charge = chargeIntegrationFixed(dataChannel.at(i1), timebase, baseLineValue.mean, 0, upperWindow);
+			Double_t charge = chargeIntegrationFixed(dataChannel.at(i1), timebase, 0, 0, upperWindow);
+
+			outDataCh[i1] = charge;
+		}
 	}
 }
 
@@ -643,6 +759,151 @@ void plottingIntegratedCharge(const std::string fileNameBase,
 		plots1D.push_back(newPlot);
 	}
 	matrixInteQ.clear();
+}
+
+///////////////////////////////////////////////////////////////////////////////
+///                           Analysis functions                            ///
+///////////////////////////////////////////////////////////////////////////////
+
+double square(const double x)
+{
+	return x * x;
+}
+
+int64_t factorial(const int64_t n) // up to 
+{
+	return (n == 1 || n == 0) ? 1 : factorial(n - 1) * n;
+}
+
+double factorialD(const int n)
+{
+	return (n == 1 || n == 0) ? 1 : factorial(n - 1) * n;
+}
+
+double gaussDistribution(double x, double mu, double sigma)
+{
+	return exp(-0.5 * square(x - mu) / square(sigma)) / (sigma * sqrt(M_2_PIl));
+}
+
+double poissGaussDistribution(double x, double ampl, double lambda, double q0, 
+		double sigma0, double mu, double sigma, int nPeaks)
+{
+	// lambda is Poissonian distribution parameter
+	// q0 is mean of Gaussian for 0th PE peak
+	// sigma0 is std of Gaussian for each PE peak
+	// mu and sigma are mean and std of separation between PE peaks
+	double total = 0;
+	if (nPeaks > 20)
+	{
+		std::cout << "NOTE: n! loses int64 precision at this level (n > 20)" << std::endl;
+	}
+	for (int i = 0 ; i < nPeaks ; i++)
+	{
+		if (i < 21) // factorial loses int64 precision at this level
+		{
+			total += (pow(lambda, i) * exp(-lambda) / factorial(i) ) * 
+			gaussDistribution(x, i * mu + q0, sqrt(square(i*sigma) + square(sigma0)));
+		}
+		else if (i < 171) // factorial exceeds double exponent range at this level
+		{
+			total += (pow(lambda, i) * exp(-lambda) / factorialD(i) ) * 
+			gaussDistribution(x, i * mu + q0, sqrt(square(i*sigma) + square(sigma0)));
+		}
+		else
+		{
+			std::cout << "WARNING: i out of exponent range for factorialD" << std::endl;
+			break;
+		}
+	}
+	return total * ampl;
+}
+
+individualPeResult individualPeAnalysis(const double* data, const int nWfs,
+		const double xmin, const double xmax, const int nbins)
+{
+	TCanvas *c = new TCanvas("c", "c");
+	TH1D* hist = new TH1D("hist", "Individual Photoelectron Signal", nbins, xmin, xmax);
+
+
+	TF1* fn = new TF1("poissGaus", [](double *x, double *p){return
+		poissGaussDistribution(x[0], p[0], p[1], p[2], p[3], p[4], p[5], p[6]);}, xmin, xmax, 7);
+
+	for (int i = 0 ; i < nWfs ; i++)
+	{
+		hist->Fill(data[i]);
+	}
+
+	hist->Sumw2();
+
+	individualPeResult bestRes;
+	double bestChi2 = DBL_MAX;
+	TH1D* bestHist;
+
+	for (int i = 2 ; i < 17 ; i++)
+	{
+		fn->SetParameter(0, nWfs);
+		fn->SetParameter(1, 3);
+		fn->SetParameter(2, 0);
+		fn->SetParLimits(2, -10, 10);
+		fn->SetParameter(3, 5);
+		fn->SetParameter(4, -50);
+		fn->SetParameter(5, 5);
+		fn->FixParameter(6, i);
+		for (int j = 0 ; j < 7 ; j++) fn->SetParError(j, 0);
+
+		TFitResultPtr res = hist->Fit(fn, "SWMQ");
+		double tmpChi2 = res->Chi2();
+		if (tmpChi2 < bestChi2)
+		{
+			bestRes = {res->Parameter(0), res->ParError(0),
+				   	   res->Parameter(1), res->ParError(1),
+				   	   res->Parameter(2), res->ParError(2),
+				   	   res->Parameter(3), res->ParError(3),
+				   	   res->Parameter(4), res->ParError(4),
+				   	   res->Parameter(5), res->ParError(5), 
+					   i};
+			bestChi2 = tmpChi2;
+			bestHist = (TH1D*) hist->Clone();
+		}
+	}
+	bestHist->Sumw2(kFALSE);
+	bestHist->Draw();
+	c->SaveAs("/home/amiles/Documents/PhD/mppc-qc/plots/7-8-9_tmpPoiss.pdf");
+
+	delete hist;
+	delete bestHist;
+	delete c;
+
+	return bestRes;
+}
+
+highPeResult highPeAnalysis(const double* data, const int nWfs,
+		const double xmin, const double xmax, const int nbins)
+{
+	TCanvas *c = new TCanvas("c", "c");
+	TH1D* hist = new TH1D("hist", "High Photoelectron Signal", nbins, xmin, xmax);
+
+	for (int i = 0 ; i < nWfs ; i++)
+	{
+		hist->Fill(data[i]);
+	}
+
+	hist->Sumw2();
+
+	TFitResultPtr res = hist->Fit("gaus","SQ");
+	// "S" returns resultptr, "Q" is to minimise printing at the end
+	// XXX: Consider adding option "L", log likelihood method
+
+	highPeResult a = {res->Parameter(0), res->ParError(0),
+					  res->Parameter(1), res->ParError(1),
+					  res->Parameter(2), res->ParError(2)};
+
+	hist->Draw();
+	c->SaveAs("/home/amiles/Documents/PhD/mppc-qc/plots/7-8-9_tmpGauss.pdf");
+	delete hist;
+	delete c;
+
+	return a;
 }
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -985,9 +1246,11 @@ void batchPreAnalysis(std::string directory, std::vector<std::string> files)
 	}
 }
 
-void darkPreAnalysis(std::string directory, std::string date, std::string mppcStr,
+int darkPreAnalysis(std::string directory, std::string date, std::string mppcStr,
 					 std::vector<TTree *> forest)
 {
+	int wfs;
+
 	for (const std::string &bias : g_dcp.biasFullVec)
 	{
 		for (const std::string &pico : picoscopeNames)
@@ -1014,17 +1277,14 @@ void darkPreAnalysis(std::string directory, std::string date, std::string mppcSt
 			std::vector<std::vector<std::vector<sample>>> data = readData(file, header);
 			file.close();
 			
-			const int wfs = (const int) header.numWaveforms;
-			const int elems = 4 * 2 * wfs;
+			wfs = (const int) header.numWaveforms;
+			const int elems = 4 * wfs;
 
-			double outData2D[4][2][wfs];
-			double (&outData1D)[elems] = reinterpret_cast<double(&)[elems]>(outData2D);
-
-			uint32_t numSamples(*max_element(header.chSamples.begin(), header.chSamples.end()));
+			Double_t *outData = (Double_t*) calloc(elems, sizeof(Double_t));
 
 			std::cout << "###### Starting analysis..." << std::endl;
 
-			processDataPreAnalysis(header, data, outData1D, wfs, 0, numSamples); // XXX: different method for dark counting?
+			processDarkPreAnalysis(header, data, outData);
 
 			for (int i0(0) ; i0 < 4 ; ++i0)
 			{
@@ -1033,22 +1293,26 @@ void darkPreAnalysis(std::string directory, std::string date, std::string mppcSt
 					continue;
 				}
 
-				std::string branchName = combineComponents("_", {bias, "Dark", pico});
+				std::string branchNameCharge = combineComponents("_", {bias, "Dark", pico, "Charge"});
 				char *leaflist;
 
-				asprintf(&leaflist, "data[2][%i]/D", wfs);
+				asprintf(&leaflist, "data[%i]/D", wfs);
 
-				forest.at(i0)->Branch(branchName.c_str(), outData2D[i0], (const char *) leaflist); //	TODO: FINISH THIS
-				forest.at(i0)->Fill();
+				// TODO: FINISH THIS
+				TBranch *b = forest.at(i0)->Branch(branchNameCharge.c_str(), 
+							 outData + i0 * wfs, (const char *) leaflist);
+				b->Fill();
 			}
+			free(outData);
 
 			std::cout << "###### Written branches to trees\n" << std::endl;
-			break; // XXX: TESTING BREAK
-		}break; // XXX: TESTING BREAK
+		}
 	}
+
+	return wfs;
 }
 
-void runLedPreAnalysisFile(std::string filePath, std::string bias,
+int ledPreAnalysisFile(std::string filePath, std::string bias,
 	std::string led, std::string pico, std::vector<TTree *> forest)
 {
 	std::cout << "### Next file: " << filePath << std::endl;
@@ -1070,10 +1334,13 @@ void runLedPreAnalysisFile(std::string filePath, std::string bias,
 	file.close();
 
 	const int wfs = (const int) header.numWaveforms;
+	const int elems = 4 * 3 * wfs;
 
-	double outData[4][2][wfs];
+	Double_t *outData = (Double_t*) calloc(elems, sizeof(Double_t));
 
-	processDataPreAnalysis(header, data, &outData[0][0][0], wfs);
+	std::cout << "###### Starting analysis..." << std::endl;
+
+	processLedPreAnalysis(header, data, outData);
 
 	for (int i0(0) ; i0 < 4 ; ++i0)
 	{
@@ -1082,21 +1349,35 @@ void runLedPreAnalysisFile(std::string filePath, std::string bias,
 			continue;
 		}
 
-		std::string branchName = combineComponents("_", {bias, led, pico});
+		std::string branchNameCharge = combineComponents("_", {bias, led, pico, "Charge"});
+		std::string branchNameTime = combineComponents("_", {bias, led, pico, "Time"});
+		std::string branchNameVoltage = combineComponents("_", {bias, led, pico, "Voltage"});
 		char *leaflist;
 
-		asprintf(&leaflist, "data[%i]/D", 2 * wfs);
+		asprintf(&leaflist, "data[%i]/D", wfs);
 
-		forest.at(i0)->Branch(branchName.c_str(), outData[i0], (const char *) leaflist); //	TODO: FINISH THIS
-		forest.at(i0)->Fill();
+		TBranch *bC = forest.at(i0)->Branch(branchNameCharge.c_str(),
+					  outData + (i0 * 3 + 0) * wfs, (const char *) leaflist);
+		TBranch *bT = forest.at(i0)->Branch(branchNameTime.c_str(),
+					  outData + (i0 * 3 + 1) * wfs, (const char *) leaflist);
+		TBranch *bV = forest.at(i0)->Branch(branchNameVoltage.c_str(),
+					  outData + (i0 * 3 + 2) * wfs, (const char *) leaflist);
+		bC->Fill();
+		bT->Fill();
+		bV->Fill();
 	}
+	free(outData);
 
 	std::cout << "###### Written branches to trees\n" << std::endl;
+
+	return wfs;
 }
 
-void ledPreAnalysis(std::string directory, std::string date, std::string mppcStr,
+int ledPreAnalysis(std::string directory, std::string date, std::string mppcStr,
 					std::vector<TTree *> forest)
 {
+	int wfs;
+
 	for (const std::string &bias : g_dcp.biasFullVec)
 	{
 		for (const std::string &led : g_dcp.ledShortVec)
@@ -1107,11 +1388,9 @@ void ledPreAnalysis(std::string directory, std::string date, std::string mppcStr
 				std::string fileBasename(combineComponents("_", fileVec));
 				std::string filePath(directory + "/" + fileBasename + ".dat");
 
-				runLedPreAnalysisFile(filePath, bias, led, pico, forest);
-
-				break; // XXX: TESTING BREAK
-			}break; // XXX: TESTING BREAK
-		}break; // XXX: TESTING BREAK
+				wfs = ledPreAnalysisFile(filePath, bias, led, pico, forest);
+			}
+		}
 	}
 
 	for (const std::string &bias : g_dcp.biasShortVec)
@@ -1124,12 +1403,12 @@ void ledPreAnalysis(std::string directory, std::string date, std::string mppcStr
 				std::string fileBasename(combineComponents("_", fileVec));
 				std::string filePath(directory + "/" + fileBasename + ".dat");
 
-				runLedPreAnalysisFile(filePath, bias, led, pico, forest);
-
-				break; // XXX: TESTING BREAK
-			}break; // XXX: TESTING BREAK
-		}break; // XXX: TESTING BREAK
+				wfs = ledPreAnalysisFile(filePath, bias, led, pico, forest);
+			}
+		}
 	}
+
+	return wfs;
 }
 
 void preAnalyseFolder(std::string directory, std::string date, std::string outputDirectory)
@@ -1176,9 +1455,22 @@ void preAnalyseFolder(std::string directory, std::string date, std::string outpu
 
 	// TODO: Header/metadata info
 
+	file->WriteObject(&(g_dcp.biasFullVec), "biasFullVec");
+	file->WriteObject(&(g_dcp.biasShortVec), "biasShortVec");
+	file->WriteObject(&(g_dcp.ledFullVec), "ledFullVec");
+	file->WriteObject(&(g_dcp.ledShortVec), "ledShortVec");
+	file->WriteObject(&g_pmt, "pmtVoltage");
+	file->WriteObject(&picoscopeNames, "picoscopeNames");
+	file->WriteObject(&mppcVec, "mppcNumbers");
+
 	darkPreAnalysis(directory, date, mppcStr, forest);
 
 	ledPreAnalysis(directory, date, mppcStr, forest);
+
+	for (TTree *t : forest)
+	{
+		t->SetEntries(1);
+	}
 
 	// populate trees with branches per file input
 
@@ -1193,12 +1485,285 @@ void preAnalyseFolder(std::string directory, std::string date, std::string outpu
 	std::cout << "### File closed" << std::endl;
 }
 
+highPeResult singleSetGaussFitting(TTree *t, std::string bias, std::string led, 
+		std::vector<std::string> pico)
+{
+	TTreeReader reader(t);
+	std::string str1 = bias + "_" + led + "_" + pico.at(0) + "_Charge.data";
+	std::string str2 = bias + "_" + led + "_" + pico.at(0) + "_Charge.data";
+	TTreeReaderArray<Double_t> dataPico1(reader, str1.c_str());
+	TTreeReaderArray<Double_t> dataPico2(reader, str2.c_str());
+	reader.Next();
+
+	if (dataPico1.GetSize() != dataPico2.GetSize())
+	{
+		std::cout << "ERROR: inconsistent array sizes" << std::endl;
+		std::cout << " - dataPico1 Size: " << dataPico1.GetSize() << std::endl;
+		std::cout << " - dataPico2 Size: " << dataPico2.GetSize() << std::endl;
+	}
+	const int n = dataPico1.GetSize() + dataPico2.GetSize();
+	double fullData[n];
+	double chargeMin = dataPico1[0];
+	double chargeMax = dataPico1[0];
+	for (uint32_t i = 0 ; i < dataPico1.GetSize() ; i++)
+	{
+		fullData[i] = dataPico1[i];
+		fullData[i + dataPico1.GetSize()] = dataPico2[i];
+
+		if (dataPico1[i] < chargeMin) chargeMin = dataPico1[i];
+		if (dataPico2[i] < chargeMin) chargeMin = dataPico2[i];
+		if (dataPico1[i] > chargeMax) chargeMax = dataPico1[i];
+		if (dataPico2[i] > chargeMax) chargeMax = dataPico2[i];
+	}
+
+	double padding = (chargeMax - chargeMin) * 0.05;
+
+	return highPeAnalysis(fullData, n, chargeMin - padding, chargeMax + padding, 500);
+	// XXX: global parameters for some of this should be used instead of hardcoded
+}
+
+std::vector<std::vector<std::vector<highPeResult>>> gaussFitting(
+		dataCollectionParameters &dcp, std::vector<TTree*> forest,
+		std::vector<std::string> pico)
+{
+	TCanvas *c = new TCanvas();
+	c->SaveAs("/home/amiles/Documents/PhD/mppc-qc/plots/7-8-9_tmpGauss.pdf[");
+	std::vector<std::vector<std::vector<highPeResult>>> gaussFits;
+	for (TTree* t : forest)
+	{
+		std::vector<std::vector<highPeResult>> chGaussFits;
+		for (std::string bias : dcp.biasFullVec)
+		{
+			std::vector<highPeResult> biasGaussFits;
+			for (std::string led : dcp.ledShortVec)
+			{
+				biasGaussFits.push_back(singleSetGaussFitting(t, bias, led, pico));
+			}
+			chGaussFits.push_back(biasGaussFits);
+		}
+
+		for (std::string bias : dcp.biasShortVec)
+		{
+			std::vector<highPeResult> biasGaussFits;
+			for (std::string led : dcp.ledFullVec)
+			{
+				biasGaussFits.push_back(singleSetGaussFitting(t, bias, led, pico));
+			}
+			chGaussFits.push_back(biasGaussFits);
+		}
+		gaussFits.push_back(chGaussFits);
+	}
+	c->SaveAs("/home/amiles/Documents/PhD/mppc-qc/plots/7-8-9_tmpGauss.pdf]");
+	delete c;
+	return gaussFits;
+}
+
+individualPeResult singleSetPoissFitting(TTree *t, std::string bias, std::string led, 
+		std::vector<std::string> pico)
+{
+	TTreeReader reader(t);
+	std::string str1 = bias + "_" + led + "_" + pico.at(0) + "_Charge.data";
+	std::string str2 = bias + "_" + led + "_" + pico.at(0) + "_Charge.data";
+	TTreeReaderArray<Double_t> dataPico1(reader, str1.c_str());
+	TTreeReaderArray<Double_t> dataPico2(reader, str2.c_str());
+	reader.Next();
+
+	if (dataPico1.GetSize() != dataPico2.GetSize())
+	{
+		std::cout << "ERROR: inconsistent array sizes" << std::endl;
+		std::cout << " - dataPico1 Size: " << dataPico1.GetSize() << std::endl;
+		std::cout << " - dataPico2 Size: " << dataPico2.GetSize() << std::endl;
+	}
+	const int n = dataPico1.GetSize() + dataPico2.GetSize();
+	double fullData[n];
+	double chargeMin = dataPico1[0];
+	double chargeMax = dataPico1[0];
+	for (uint32_t i = 0 ; i < dataPico1.GetSize() ; i++)
+	{
+		fullData[i] = dataPico1[i];
+		fullData[i + dataPico1.GetSize()] = dataPico2[i];
+
+		if (dataPico1[i] < chargeMin) chargeMin = dataPico1[i];
+		if (dataPico2[i] < chargeMin) chargeMin = dataPico2[i];
+		if (dataPico1[i] > chargeMax) chargeMax = dataPico1[i];
+		if (dataPico2[i] > chargeMax) chargeMax = dataPico2[i];
+	}
+
+	double padding = (chargeMax - chargeMin) * 0.05;
+
+	return individualPeAnalysis(fullData, n, chargeMin - padding, chargeMax + padding, 500);
+	// XXX: global parameters for some of this should be used instead of hardcoded
+}
+
+std::vector<std::vector<std::vector<individualPeResult>>> poissFitting(
+		dataCollectionParameters &dcp, std::vector<TTree*> forest,
+		std::vector<std::string> pico)
+{
+	std::vector<std::vector<std::vector<individualPeResult>>> poissFits;
+	TCanvas *c = new TCanvas();
+	c->SaveAs("/home/amiles/Documents/PhD/mppc-qc/plots/7-8-9_tmpPoiss.pdf[");
+	for (TTree* t : forest)
+	{
+		if (t == forest.at(3)) continue;
+		std::vector<std::vector<individualPeResult>> chPoissFits;
+		for (std::string bias : dcp.biasFullVec)
+		{
+			std::vector<individualPeResult> biasPoissFits;
+			for (std::string led : dcp.ledShortVec)
+			{
+				if (std::stoi(led) > g_highPeCutoff) continue;
+				biasPoissFits.push_back(singleSetPoissFitting(t, bias, led, pico));
+			}
+			chPoissFits.push_back(biasPoissFits);
+		}
+
+		for (std::string bias : dcp.biasShortVec)
+		{
+			std::vector<individualPeResult> biasPoissFits;
+			for (std::string led : dcp.ledFullVec)
+			{
+				if (std::stoi(led) > g_highPeCutoff) continue;
+				biasPoissFits.push_back(singleSetPoissFitting(t, bias, led, pico));
+			}
+			chPoissFits.push_back(biasPoissFits);
+		}
+		poissFits.push_back(chPoissFits);
+	}
+	c->SaveAs("/home/amiles/Documents/PhD/mppc-qc/plots/7-8-9_tmpPoiss.pdf]");
+	delete c;
+	return poissFits;
+}
+
+void genericAnalysis(std::string filePath, std::string outputPath)
+{
+	TFile *file = TFile::Open((TString) filePath, "READ");
+
+	std::vector<std::string>* biasFullVec = (std::vector<std::string>*)file->Get("biasFullVec");
+	std::vector<std::string>* biasShortVec = (std::vector<std::string>*)file->Get("biasShortVec");
+	std::vector<std::string>* ledFullVec = (std::vector<std::string>*)file->Get("ledFullVec");
+	std::vector<std::string>* ledShortVec = (std::vector<std::string>*)file->Get("ledShortVec");
+	std::vector<std::string>* picoscopeNames = (std::vector<std::string>*)file->Get("picoscopeNames");
+	std::vector<std::string>* mppcNumbers = (std::vector<std::string>*)file->Get("mppcNumbers");
+
+	std::string mppcStr = combineComponents("-", *mppcNumbers);
+
+	TTree *treeBack = (TTree*) file->Get("treeBack");
+	TTree *treeMiddle = (TTree*) file->Get("treeMiddle");
+	TTree *treeFront = (TTree*) file->Get("treeFront");
+	TTree *treePmt = (TTree*) file->Get("treePmt");
+
+	std::vector<TTree*> forest = {treeBack, treeMiddle, treeFront, treePmt};
+
+	std::vector<std::string> allBias(*biasFullVec);
+	allBias.insert(allBias.end(), biasShortVec->begin(), biasShortVec->end());
+	// std::vector<std::string> allBias(biasFullVec->size() + biasShortVec->size());
+	// std::merge(biasFullVec->begin(), biasFullVec->end(), biasShortVec->begin(),
+	// 	biasShortVec->end(), allBias.begin());
+
+// for (std::string bias : *biasFullVec) std::cout << bias << std::endl;
+// for (std::string bias : *biasShortVec) std::cout << bias << std::endl;
+// 	for (std::string bias : allBias) std::cout << bias << std::endl;
+	
+	std::vector<double> ledShortX;
+	for (std::string led : *ledShortVec) ledShortX.push_back(std::stod(led));
+	std::vector<double> ledFullX;
+	for (std::string led : *ledFullVec) ledFullX.push_back(std::stod(led));
+
+	// 3D vectors: num channels (4) x num bias voltages x num applicable LED voltages
+	std::vector<std::vector<std::vector<highPeResult>>> gaussFits; // ALL LED V fits
+	std::vector<std::vector<std::vector<individualPeResult>>> poissFits; // only low PE LED V
+	
+	while (outputPath.back() == '/')
+	{
+		outputPath.pop_back();
+	}
+
+	TString pdfFile(outputPath + "/" + mppcStr + ".pdf");
+	TCanvas *Ctmp = new TCanvas("temp", "temp", 100, 100);
+
+	dataCollectionParameters dcp = {*biasFullVec, *ledFullVec, *biasShortVec, *ledShortVec};
+
+	ROOT::Math::MinimizerOptions* minOpt = new ROOT::Math::MinimizerOptions();
+	minOpt->SetTolerance(0.001);
+
+	gaussFits = gaussFitting(dcp, forest, *picoscopeNames);
+	poissFits = poissFitting(dcp, forest, *picoscopeNames);
+
+	std::vector<std::vector<highPeResult>> pmtGauss = gaussFits.at(3);
+
+	Ctmp->SaveAs(pdfFile + "[");
+
+	for (int i = 0 ; i < 3 ; i++)
+	{
+		TString title = TString("MPPC " + (*mppcNumbers).at(i) + " High PE");
+		TCanvas *c = new TCanvas((TString)(*mppcNumbers).at(i), title);
+		c->cd();
+		TMultiGraph *mg = new TMultiGraph("mg", title.Data());
+		TLegend *leg = new TLegend(0.13, 0.48, 0.23, 0.88);
+		TGraph *gr;
+
+		std::vector<std::vector<highPeResult>> chGauss = gaussFits.at(i);
+
+		for (int j = 0 ; j < (int) chGauss.size() ; j++)
+		{
+			std::string bias = allBias.at(j);
+			std::vector<highPeResult> biasGauss = chGauss.at(j);
+			std::vector<double> x; // mean mppc / mean pmt
+			std::vector<double> y; // LED
+
+			// if (biasGauss.size() == ledShortX.size())
+			// {
+			// 	x = ledShortX;
+			// }
+			// else
+			// {
+			// 	x = ledFullX;
+			// }
+
+			for (int k = 0 ; k < (int) biasGauss.size() ; k++)
+			{
+				y.push_back(biasGauss.at(k).mean * -1);
+				x.push_back(pmtGauss.at(j).at(k).mean * -1);
+			}
+
+			gr = new TGraph((Int_t) x.size(), x.data(), y.data());
+			gr->SetLineColor(j + 1);
+			gr->SetMarkerColor(j + 1);
+			gr->SetFillColor(j + 1);
+			mg->Add(gr, "*PL");
+			leg->AddEntry(gr, bias.c_str(), "lp");
+		}
+		mg->Draw("ALP");
+		leg->Draw();
+		c->Modified();
+		c->Update();
+		c->SaveAs(pdfFile);
+	}
+	Ctmp->SaveAs(pdfFile + "]");
+}
+
+void tempAnalysis(std::string inputFolder,
+				  std::string filenamePattern,
+				  std::string outputFolder)
+{
+	// const Double_t highLed = std::stod(g_highestLed);
+
+	// environmentSample temp;
+}
+
 ///////////////////////////////////////////////////////////////////////////////
 ///                              Main function                              ///
 ///////////////////////////////////////////////////////////////////////////////
 
 int main(int argc, char **argv)
 {
+	// testOutFile("/home/amiles/Documents/PhD/mppc-qc/pre-analyse/root-files/1-2-3.root");
+	// readEnvData("../data/temp20240726.txt");
+	// return 1;
+
+	col->SetRGB(0.5,0.5,0.5);
+	genericAnalysis("/home/amiles/Documents/PhD/mppc-qc/pre-analyse/root-files/7-8-9.root",
+					"/home/amiles/Documents/PhD/mppc-qc/plots/");return 1;
 	if (argc < 2)
 	{
 		std::cerr << "ERROR: you need at least 1 argument: 'batch-pre-analyse', 'pre-analyse' or 'analyse'..." << std::endl;
@@ -1229,6 +1794,10 @@ int main(int argc, char **argv)
 		preAnalyseFolder(inputDir, date, outputDir);
 	}
 	else if (analysisType == "analyse")
+	{
+
+	}
+	else if (analysisType == "old-analyse")
 	{
 		if (argc != 7)
 		{
