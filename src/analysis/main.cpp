@@ -1168,6 +1168,11 @@ void fillingAndSavingTree(const std::string fileNameBase,
 
 int preAnalyseFile(std::string directory, std::string filePath)
 {
+	if (directory.back() != '/')
+	{
+		directory += "/";
+	}
+
 	std::string fileBaseExt = filePath.substr(filePath.find_last_of("/") + 1);
 	std::string::size_type const p(fileBaseExt.find_last_of('.'));
 	std::string fileBasename = fileBaseExt.substr(0, p);
