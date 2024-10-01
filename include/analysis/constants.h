@@ -176,6 +176,7 @@ struct darkResult
 const std::vector<int>
 	ps6000VRanges{10, 20, 50, 100, 200, 500, 1000, 2000, 5000, 10000, 20000, 50000};
 const bool showHeader(false);
+const bool positiveSignals = false;
 // const int g_jstOffset = 32400; // 9 hours in seconds
 // const int g_localOffset = -; // - hours in seconds
 // TCanvas *g_c = new TCanvas("g_c", "g_c", 100, 100, 500, 500);

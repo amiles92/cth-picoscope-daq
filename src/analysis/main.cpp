@@ -228,7 +228,7 @@ std::vector<std::vector<std::vector<sample>>> readData(std::ifstream &f, dataHea
 			std::vector<sample> wfChData(nSamples);
 			for (int i1(0); i1 < nSamples; ++i1)
 			{
-				sample newSample{adc2mv(chADCData[i0 * nSamples + i1], d.chVRanges.at(ch)), timeBase * i1};
+				sample newSample{adc2mv(chADCData[i0 * nSamples + i1], d.chVRanges.at(ch)) * (positiveSignals ? -1 : 1), timeBase * i1};
 				wfChData.at(i1) = (newSample);
 				// std::cout << newSample.time << " / " << newSample.voltage << std::endl;
 			}
