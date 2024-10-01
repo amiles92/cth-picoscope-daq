@@ -1761,9 +1761,9 @@ int main(int argc, char **argv)
 	// readEnvData("../data/temp20240726.txt");
 	// return 1;
 
-	// col->SetRGB(0.5,0.5,0.5);
-	// genericAnalysis("/home/amiles/Documents/PhD/mppc-qc/pre-analyse/root-files/7-8-9.root",
-	// 				"/home/amiles/Documents/PhD/mppc-qc/plots/");return 1;
+	col->SetRGB(0.5,0.5,0.5);
+	genericAnalysis("/home/amiles/Documents/PhD/mppc-qc/pre-analyse/root-files/7-8-9.root",
+					"/home/amiles/Documents/PhD/mppc-qc/plots/");return 1;
 	if (argc < 2)
 	{
 		std::cerr << "ERROR: you need at least 1 argument: 'batch-pre-analyse', 'pre-analyse' or 'analyse'..." << std::endl;
