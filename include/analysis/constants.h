@@ -1,6 +1,8 @@
 #ifndef constants_h
 #define constants_h
 
+#define PI2_CONST 0.636619772367581343075535053490057448L
+
 #include <algorithm>
 #include <array>
 #include <bitset>

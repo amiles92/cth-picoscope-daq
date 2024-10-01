@@ -782,7 +782,7 @@ double factorialD(const int n)
 
 double gaussDistribution(double x, double mu, double sigma)
 {
-	return exp(-0.5 * square(x - mu) / square(sigma)) / (sigma * sqrt(M_2_PIl));
+	return exp(-0.5 * square(x - mu) / square(sigma)) / (sigma * sqrt(PI2_CONST));
 }
 
 double poissGaussDistribution(double x, double ampl, double lambda, double q0, 
