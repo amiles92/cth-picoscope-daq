@@ -9,7 +9,7 @@ bool isExisting(const std::string &name)
 	return (access(name.c_str(), F_OK) != -1);
 }
 
-std::vector<std::string> stringComponents(const std::string &name, const char delim = '_')
+std::vector<std::string> stringComponents(const std::string &name, const char delim)
 {
 	std::stringstream ss(name);
 	std::string tmp;
@@ -543,20 +543,6 @@ std::vector<sample> movingAverage(const std::vector<sample> &data,
 	return newData;
 }
 
-// TODO: Do we really need it???
-void plottingMinimumMovingAverage(const std::string fileNameBase,
-								  const std::vector<std::vector<std::vector<sample>>> &data,
-								  std::vector<plot1D> &plots1D,
-								  std::vector<std::vector<double>> pulseMinimumMovingAverageMatrix,
-								  const int nBins,
-								  const int windowLowerEdge,
-								  const int windowUpperEdge,
-								  const int nHalfAverage,
-								  const int nSamples,
-								  const double timeBase)
-{
-}
-
 gaussParams baseLine(const std::vector<sample> &data,
 					 const int windowLowerEdge,
 					 const int windowUpperEdge)
@@ -569,6 +555,101 @@ gaussParams baseLine(const std::vector<sample> &data,
 	}
 	gaussParams parameters{x, sqrt(((windowUpperEdge - windowLowerEdge + 1) / (windowUpperEdge - windowLowerEdge)) * (x2 - x * x))};
 	return parameters;
+}
+
+double sigmoidExpDecay(double x, double ampl, double step, double lb)
+{
+	return ampl * exp(-lb * (x - step)) / (1 + exp(-(x - step)));
+}
+
+double singlePulse(double *x, double *p)
+{
+	return p[0] + sigmoidExpDecay(x[0], p[1], p[2], p[3]);//0.05);
+}
+
+double doublePulse(double *x, double *p)
+{
+	if (abs(p[2] - p[4]) < 3) return DBL_MAX;
+	return p[0] + sigmoidExpDecay(x[0], p[1], p[2], p[5])//0.05) 
+				+ sigmoidExpDecay(x[0], p[3], p[4], p[6]);//0.05);
+}
+
+double dc(double *x, double *p)
+{
+	return p[0];
+}
+
+gaussParams baseLineLandau(const std::vector<sample> &data,
+						   const int windowLowerEdge,
+						   const int windowUpperEdge)
+{
+	int nbins = windowUpperEdge - windowLowerEdge + 1;
+	double xmin = windowLowerEdge - 0.5;
+	double xmax = windowUpperEdge + 0.5;
+
+	double minPulseHeight = -3;
+	double minLb = 0.04;
+	double maxLb = 0.08;
+
+	const char* fitOptions = "SNMQ";
+
+	TH1D* hist = new TH1D("hist", "baseline", nbins, xmin, xmax);
+	
+	TF1* fnSingle = new TF1("singlePulse", singlePulse, xmin, xmax, 5);
+	fnSingle->SetParameter(0, 0);
+	fnSingle->SetParameter(1, -5.);
+	fnSingle->SetParLimits(1, -200, minPulseHeight);
+	fnSingle->SetParameter(2, nbins / 2 - 5);
+	fnSingle->SetParLimits(2, xmin - 10, xmax - 5);
+	fnSingle->SetParameter(3, 0.05);
+	fnSingle->SetParLimits(3, minLb, maxLb);
+
+	TF1* fnDouble = new TF1("doublePulse", doublePulse, xmin, xmax, 7);
+	fnDouble->SetParameter(0, 0);
+	fnDouble->SetParameter(1, -5.);
+	fnDouble->SetParLimits(1, -200, minPulseHeight);
+	fnDouble->SetParameter(2, xmin + 0.1 * nbins);
+	fnDouble->SetParLimits(2, xmin - 10, xmax - 5);
+	fnDouble->SetParameter(3, -5.);
+	fnDouble->SetParLimits(3, -200, minPulseHeight);
+	fnDouble->SetParameter(4, xmax - 0.1 * nbins);
+	fnDouble->SetParLimits(4, xmin - 10, xmax - 5);
+	fnDouble->SetParameter(5, 0.05);
+	fnDouble->SetParLimits(5, minLb, maxLb);
+	fnDouble->SetParameter(6, 0.05);
+	fnDouble->SetParLimits(6, minLb, maxLb);
+
+	TF1* fnDc = new TF1("dc", dc, xmin, xmax, 1);
+	fnDc->SetParameter(0,0);
+
+	for (int i = windowLowerEdge ; i <= windowUpperEdge ; i++)
+	{
+		hist->SetBinContent(i, data.at(i).voltage);
+	}
+
+	TFitResultPtr fitSingle = hist->Fit(fnSingle, fitOptions);
+	TFitResultPtr fitDc = hist->Fit(fnDc, fitOptions);
+
+	if (fitDc->Chi2() < fitSingle->Chi2())// && fitDc->Chi2() < fitDouble->Chi2())
+	{
+		delete hist;
+		delete fnSingle;
+		delete fnDouble;
+		delete fnDc;
+		return gaussParams{fitDc->Parameter(0), fitDc->ParError(0)};
+	}
+
+	TFitResultPtr fitDouble = hist->Fit(fnDouble, fitOptions);
+	delete hist;
+	delete fnSingle;
+	delete fnDouble;
+	delete fnDc;
+	if (fitSingle->Chi2() < fitDouble->Chi2())
+	{
+		return gaussParams{fitSingle->Parameter(0), fitSingle->ParError(0)};
+	}
+
+	return gaussParams{fitDouble->Parameter(0), fitDouble->ParError(0)};
 }
 
 double chargeIntegrationPeak(const std::vector<sample> &data,
@@ -638,9 +719,8 @@ void getWaveformProperties(const std::vector<std::vector<sample>> &dataChannel,
 {
 	for (uint i0(0) ; i0 < dataChannel.size() ; ++i0)
 	{
-		gaussParams baseLineValue(baseLine(dataChannel.at(i0), g_baselineLowerWindow, g_baselineUpperWindow));
+		gaussParams baseLineValue = baseLineLandau(dataChannel.at(i0), g_baselineLowerWindow, g_baselineUpperWindow);
 		Double_t charge = chargeIntegrationFixed(dataChannel.at(i0), timebase, baseLineValue.mean, lowerWindow, upperWindow);
-		// points minSample = getMinData(dataChannel.at(i0));
 		sample minSample = getMinDataSingle(dataChannel.at(i0));
 
 		integratedChargeChannel[i0] = charge;
@@ -656,7 +736,7 @@ void processLedPreAnalysis(const dataHeader &header,
 							const uint32_t lowerWindow = g_integratedLowerWindow,
 							const uint32_t upperWindow = g_integratedUpperWindow)
 {
-	for (uint i0(0) ; i0 < header.activeChannels.length() ; ++i0)
+	for (int i0(0) ; i0 < (int) header.activeChannels.length() ; ++i0)
 	{
 		if (header.activeChannels.at(i0) == '0')
 		{
@@ -770,23 +850,29 @@ double square(const double x)
 	return x * x;
 }
 
-int64_t factorial(const int64_t n) // up to 
+int64_t factorial(const int64_t n) // up to 20
 {
-	return (n == 1 || n == 0) ? 1 : factorial(n - 1) * n;
+	return factorialLookUp[n];
 }
 
-double factorialD(const int n)
+double factorialD(const int n) // up to 170
 {
-	return (n == 1 || n == 0) ? 1 : factorial(n - 1) * n;
+	return (n < 21) ? factorialLookUp[n] : factorial(n - 1) * n;
 }
 
 double gaussDistribution(double x, double mu, double sigma)
 {
-	return exp(-0.5 * square(x - mu) / square(sigma)) / (sigma * sqrt(PI2_CONST));
+	return exp(-0.5 * square(x - mu) / square(sigma)) / (sigma * sqrt(g_2pi));
 }
 
-double poissGaussDistribution(double x, double ampl, double lambda, double q0, 
-		double sigma0, double mu, double sigma, int nPeaks)
+std::vector<double> initialGuesses(TH1D* hist)
+{
+	std::vector<double> outVec(0, 4); // 0th peak, 1st peak, sigma?
+	return outVec;
+}
+
+double poissGaussDistribution(double x, double ampl, double lambda, double mu0, 
+		double sigmaPe, double mu, double sigma, int nPeaks, double ampl0, double sigma0)
 {
 	// lambda is Poissonian distribution parameter
 	// q0 is mean of Gaussian for 0th PE peak
@@ -797,17 +883,18 @@ double poissGaussDistribution(double x, double ampl, double lambda, double q0,
 	{
 		std::cout << "NOTE: n! loses int64 precision at this level (n > 20)" << std::endl;
 	}
-	for (int i = 0 ; i < nPeaks ; i++)
+	total += ampl0 * gaussDistribution(x, mu0, sigma0);
+	for (int i = 1 ; i < nPeaks ; i++) // Fit 1st peak on
 	{
 		if (i < 21) // factorial loses int64 precision at this level
 		{
-			total += (pow(lambda, i) * exp(-lambda) / factorial(i) ) * 
-			gaussDistribution(x, i * mu + q0, sqrt(square(i*sigma) + square(sigma0)));
+			total += ampl * (pow(lambda, i) * exp(-lambda) / factorial(i) ) * 
+			gaussDistribution(x, i * mu + mu0, sqrt(square(sigmaPe) + square(i*sigma)));
 		}
 		else if (i < 171) // factorial exceeds double exponent range at this level
 		{
-			total += (pow(lambda, i) * exp(-lambda) / factorialD(i) ) * 
-			gaussDistribution(x, i * mu + q0, sqrt(square(i*sigma) + square(sigma0)));
+			total += ampl * (pow(lambda, i) * exp(-lambda) / factorialD(i) ) * 
+			gaussDistribution(x, i * mu + mu0, sqrt(square(sigmaPe) + square(i*sigma)));
 		}
 		else
 		{
@@ -815,7 +902,12 @@ double poissGaussDistribution(double x, double ampl, double lambda, double q0,
 			break;
 		}
 	}
-	return total * ampl;
+	return total;
+}
+
+double pgdPtr(double *x, double *p) // pointer version of the Poiss-Gauss distribution function
+{
+	return poissGaussDistribution(x[0], p[0], p[1], p[2], p[3], p[4], p[5], p[6], p[7], p[8]);
 }
 
 individualPeResult individualPeAnalysis(const double* data, const int nWfs,
@@ -825,8 +917,11 @@ individualPeResult individualPeAnalysis(const double* data, const int nWfs,
 	TH1D* hist = new TH1D("hist", "Individual Photoelectron Signal", nbins, xmin, xmax);
 
 
-	TF1* fn = new TF1("poissGaus", [](double *x, double *p){return
-		poissGaussDistribution(x[0], p[0], p[1], p[2], p[3], p[4], p[5], p[6]);}, xmin, xmax, 7);
+	TF1* fn = new TF1("poissGaus", pgdPtr, xmin, xmax, 9);
+	// fn->SetParNames("Amplitude", "\\lambda", "\\mu_{0}", "\\sigma_{PE}", "\\mu",
+	// 		"\\sigma", "n", "Amplitude_{0}", "\\sigma_{0}");
+	fn->SetParNames("Amplitude_Signal", "\\lambda", "Mean_Noise", "\\sigma_Signal", 
+			"Peak Separation", "\\sigma_nth Peak", "n", "Amplitude_Noise", "\\sigma_Noise");
 
 	for (int i = 0 ; i < nWfs ; i++)
 	{
@@ -835,21 +930,29 @@ individualPeResult individualPeAnalysis(const double* data, const int nWfs,
 
 	hist->Sumw2();
 
+	fn->SetNpx(2 * nbins);
 	individualPeResult bestRes;
 	double bestChi2 = DBL_MAX;
+	int bestIndex = 0;
 	TH1D* bestHist;
 
-	for (int i = 2 ; i < 17 ; i++)
+	for (int i = 2 ; i < 10 ; i++)
 	{
 		fn->SetParameter(0, nWfs);
 		fn->SetParameter(1, 3);
 		fn->SetParameter(2, 0);
-		fn->SetParLimits(2, -10, 10);
-		fn->SetParameter(3, 5);
+		fn->SetParLimits(2, -20, 15);
+		fn->SetParameter(3, 1);
+		fn->SetParLimits(3, 0.1, 25);
 		fn->SetParameter(4, -50);
-		fn->SetParameter(5, 5);
+		fn->SetParameter(5, 0.5);
+		fn->SetParLimits(5, 0.1, 8);
 		fn->FixParameter(6, i);
-		for (int j = 0 ; j < 7 ; j++) fn->SetParError(j, 0);
+		fn->SetParameter(7, 500);
+		fn->SetParLimits(7, 50, nWfs);
+		fn->SetParameter(8, 2);
+		fn->SetParLimits(8, 0.1, 12);
+		for (int j = 0 ; j < 9 ; j++) fn->SetParError(j, 0);
 
 		TFitResultPtr res = hist->Fit(fn, "SWMQ");
 		double tmpChi2 = res->Chi2();
@@ -864,15 +967,21 @@ individualPeResult individualPeAnalysis(const double* data, const int nWfs,
 					   i};
 			bestChi2 = tmpChi2;
 			bestHist = (TH1D*) hist->Clone();
+			bestIndex = i;
+			g_maxPeaks = std::max(g_maxPeaks, i);
 		}
+		if (i - bestIndex > 5) {break;} // break if it is 5 attempts past the last improvement?
 	}
 	bestHist->Sumw2(kFALSE);
+	bestHist->GetXaxis()->SetTitle("Integrated charge [mV ns]");
+	bestHist->GetYaxis()->SetTitle("Counts");
 	bestHist->Draw();
-	c->SaveAs("/home/amiles/Documents/PhD/mppc-qc/plots/7-8-9_tmpPoiss.pdf");
+	c->SaveAs("/home/amiles/Documents/PhD/mppc-qc/plots/tmpPoiss.pdf");
 
 	delete hist;
 	delete bestHist;
 	delete c;
+	delete fn;
 
 	return bestRes;
 }
@@ -898,8 +1007,13 @@ highPeResult highPeAnalysis(const double* data, const int nWfs,
 					  res->Parameter(1), res->ParError(1),
 					  res->Parameter(2), res->ParError(2)};
 
+	hist->Sumw2(kFALSE);
+	hist->GetXaxis()->SetTitle("Integrated charge [mV ns]");
+	hist->GetYaxis()->SetTitle("Counts");
+	// hist->SetStats(0);
 	hist->Draw();
-	c->SaveAs("/home/amiles/Documents/PhD/mppc-qc/plots/7-8-9_tmpGauss.pdf");
+	c->SaveAs("/home/amiles/Documents/PhD/mppc-qc/plots/tmpGauss.pdf");
+
 	delete hist;
 	delete c;
 
@@ -1112,48 +1226,48 @@ void fillingAndSavingTree(const std::string fileNameBase,
 	tree->Branch("pulseMinimum", &pulseMinimum, "pulseMinimum/D");
 	tree->Branch("pulseMinimumSampleNumber", &pulseMinimumSampleNumber, "pulseMinimumSampleNumber/I");
 	tree->Branch("pulseMinimumTime", &pulseMinimumTime, "pulseMinimumTime/D");
-	if (doMovingAverage == true)
-	{
-		tree->Branch("pulseMinimumMovingAverage", &pulseMinimumMovingAverage, "pulseMinimumMovingAverage/D");
-	}
+	// if (doMovingAverage == true)
+	// {
+	// 	tree->Branch("pulseMinimumMovingAverage", &pulseMinimumMovingAverage, "pulseMinimumMovingAverage/D");
+	// }
 	tree->Branch("integratedCharge", &integratedCharge, "integratedCharge/D");
 	for (int i0(0); i0 < 4; ++i0)
 	{
 		int n0(pulseMinimumMatrix[i0].size());
 		int n1(pulseMinimumSampleNumberMatrix[i0].size());
 		int n2(pulseMinimumTimeMatrix[i0].size());
-		int n3(pulseMinimumMovingAverageMatrix[i0].size());
+		// int n3(pulseMinimumMovingAverageMatrix[i0].size());
 		int n4(integratedChargeMatrix[i0].size());
-		if (doMovingAverage == true)
+		// if (doMovingAverage == true)
+		// {
+		// 	if (n0 != n1 || n0 != n2 || n0 != n3 || n0 != n4)
+		// 	{
+		// 		std::cout << "ERROR: vectors should all have the same size..." << std::endl;
+		// 		continue;
+		// 	}
+		// }
+		// else
+		// {
+		if (n0 != n1 || n0 != n2 || n0 != n4)
 		{
-			if (n0 != n1 || n0 != n2 || n0 != n3 || n0 != n4)
-			{
-				std::cout << "ERROR: vectors should all have the same size..." << std::endl;
-				continue;
-			}
+			std::cout << "ERROR: vectors should all have the same size (except for moving average)..." << std::endl;
+			continue;
 		}
-		else
-		{
-			if (n0 != n1 || n0 != n2 || n0 != n4)
-			{
-				std::cout << "ERROR: vectors should all have the same size (except for moving average)..." << std::endl;
-				continue;
-			}
-		}
+		// }
 		for (int i1(0); i1 < n0; ++i1)
 		{
 			channel = i0;
 			pulseMinimum = pulseMinimumMatrix[i0][i1];
 			pulseMinimumSampleNumber = pulseMinimumSampleNumberMatrix[i0][i1];
 			pulseMinimumTime = pulseMinimumTimeMatrix[i0][i1];
-			if (doMovingAverage == true)
-			{
-				pulseMinimumMovingAverage = pulseMinimumMovingAverageMatrix[i0][i1];
-			}
-			else
-			{
-				pulseMinimumMovingAverage = 0;
-			}
+			// if (doMovingAverage == true)
+			// {
+			// 	pulseMinimumMovingAverage = pulseMinimumMovingAverageMatrix[i0][i1];
+			// }
+			// else
+			// {
+			// pulseMinimumMovingAverage = 0;
+			// }
 			integratedCharge = integratedChargeMatrix[i0][i1];
 			tree->Fill();
 		}
@@ -1209,17 +1323,17 @@ int preAnalyseFile(std::string directory, std::string filePath)
 
 	int nSamples(getNumSamples(header));
 	double timeBase(getTimebase(header));
-	int nBinsT(nSamples), nBinsV(50), nBinsMinimumTime(nSamples), nBinsPulseMinimum(200), nBinsIntegrated(200), nHalfAverage(10), windowLowerEdge(10), windowUpperEdge(50);
+	int nBinsT(nSamples), nBinsV(50), nBinsMinimumTime(nSamples), nBinsPulseMinimum(200), nBinsIntegrated(200),  windowLowerEdge(10), windowUpperEdge(50);// nHalfAverage(10);
 
 	plottingFirstWaveforms(fileBasename, data, plots2D, nBinsT, nBinsV, nSamples, timeBase);
 	std::cout << "### Plotted first waveforms..." << std::endl;
 	plottingMinimum(fileBasename, data, plots1D, pulseMinimumMatrix, pulseMinimumSampleNumberMatrix, pulseMinimumTimeMatrix, nBinsMinimumTime, nBinsPulseMinimum, nSamples, timeBase);
 	std::cout << "### Plotted pulse minimum and time..." << std::endl;
-	if (doMovingAverage == true)
-	{
-		plottingMinimumMovingAverage(fileBasename, data, plots1D, pulseMinimumMovingAverageMatrix, nBinsPulseMinimum, windowLowerEdge, windowUpperEdge, nHalfAverage, nSamples, timeBase);
-		std::cout << "### Plotted moving averaged minimum peaks value..." << std::endl;
-	}
+	// if (doMovingAverage == true)
+	// {
+	// 	plottingMinimumMovingAverage(fileBasename, data, plots1D, pulseMinimumMovingAverageMatrix, nBinsPulseMinimum, windowLowerEdge, windowUpperEdge, nHalfAverage, nSamples, timeBase);
+	// 	std::cout << "### Plotted moving averaged minimum peaks value..." << std::endl;
+	// }
 	plottingIntegratedCharge(fileBasename, data, integratedChargeMatrix, plots1D, nBinsIntegrated, windowLowerEdge, windowUpperEdge, timeBase);
 	std::cout << "### Plotted integrated charge..." << std::endl;
 	std::cout << "###### Finished plotting..." << std::endl;
@@ -1251,11 +1365,9 @@ void batchPreAnalysis(std::string directory, std::vector<std::string> files)
 	}
 }
 
-int darkPreAnalysis(std::string directory, std::string date, std::string mppcStr,
+void darkPreAnalysis(std::string directory, std::string date, std::string mppcStr,
 					 std::vector<TTree *> forest)
 {
-	int wfs;
-
 	for (const std::string &bias : g_dcp.biasFullVec)
 	{
 		for (const std::string &pico : picoscopeNames)
@@ -1282,7 +1394,7 @@ int darkPreAnalysis(std::string directory, std::string date, std::string mppcStr
 			std::vector<std::vector<std::vector<sample>>> data = readData(file, header);
 			file.close();
 			
-			wfs = (const int) header.numWaveforms;
+			int wfs = (const int) header.numWaveforms;
 			const int elems = 4 * wfs;
 
 			Double_t *outData = (Double_t*) calloc(elems, sizeof(Double_t));
@@ -1313,11 +1425,9 @@ int darkPreAnalysis(std::string directory, std::string date, std::string mppcStr
 			std::cout << "###### Written branches to trees\n" << std::endl;
 		}
 	}
-
-	return wfs;
 }
 
-int ledPreAnalysisFile(std::string filePath, std::string bias,
+void ledPreAnalysisFile(std::string filePath, std::string bias,
 	std::string led, std::string pico, std::vector<TTree *> forest)
 {
 	std::cout << "### Next file: " << filePath << std::endl;
@@ -1375,14 +1485,12 @@ int ledPreAnalysisFile(std::string filePath, std::string bias,
 
 	std::cout << "###### Written branches to trees\n" << std::endl;
 
-	return wfs;
+	return;
 }
 
-int ledPreAnalysis(std::string directory, std::string date, std::string mppcStr,
+void ledPreAnalysis(std::string directory, std::string date, std::string mppcStr,
 					std::vector<TTree *> forest)
 {
-	int wfs;
-
 	for (const std::string &bias : g_dcp.biasFullVec)
 	{
 		for (const std::string &led : g_dcp.ledShortVec)
@@ -1393,7 +1501,7 @@ int ledPreAnalysis(std::string directory, std::string date, std::string mppcStr,
 				std::string fileBasename(combineComponents("_", fileVec));
 				std::string filePath(directory + "/" + fileBasename + ".dat");
 
-				wfs = ledPreAnalysisFile(filePath, bias, led, pico, forest);
+				ledPreAnalysisFile(filePath, bias, led, pico, forest);
 			}
 		}
 	}
@@ -1408,12 +1516,10 @@ int ledPreAnalysis(std::string directory, std::string date, std::string mppcStr,
 				std::string fileBasename(combineComponents("_", fileVec));
 				std::string filePath(directory + "/" + fileBasename + ".dat");
 
-				wfs = ledPreAnalysisFile(filePath, bias, led, pico, forest);
+				ledPreAnalysisFile(filePath, bias, led, pico, forest);
 			}
 		}
 	}
-
-	return wfs;
 }
 
 void preAnalyseFolder(std::string directory, std::string date, std::string outputDirectory)
@@ -1449,7 +1555,7 @@ void preAnalyseFolder(std::string directory, std::string date, std::string outpu
 	asprintf(&mppcMiddle, "%s%s", mppcTitle, mppcVec.at(1).c_str());
 	asprintf(&mppcFront, "%s%s", mppcTitle, mppcVec.at(2).c_str());
 
-	TFile *file = TFile::Open((TString)outputFile + ".root", "RECREATE");
+	TFile *file = TFile::Open((TString)outputFile + "_test.root", "RECREATE");
 
 	TTree *treeBack = new TTree("treeBack", mppcBack);
 	TTree *treeMiddle = new TTree("treeMiddle", mppcMiddle);
@@ -1468,10 +1574,25 @@ void preAnalyseFolder(std::string directory, std::string date, std::string outpu
 	file->WriteObject(&picoscopeNames, "picoscopeNames");
 	file->WriteObject(&mppcVec, "mppcNumbers");
 
+
+	// TCanvas *c = new TCanvas();
+	// c->SaveAs((g_tmpPdf + "[").c_str());
+	std::chrono::steady_clock::time_point start = std::chrono::steady_clock::now();
 	darkPreAnalysis(directory, date, mppcStr, forest);
+
+	std::chrono::steady_clock::time_point endDark = std::chrono::steady_clock::now();
+	int diffDark = std::chrono::duration_cast<std::chrono::seconds>(endDark-start).count();
+	std::cout << "Dark pre-analysis time: " << diffDark << "s" << std::endl;
 
 	ledPreAnalysis(directory, date, mppcStr, forest);
 
+	std::chrono::steady_clock::time_point endLed = std::chrono::steady_clock::now();
+	int diffLed = std::chrono::duration_cast<std::chrono::seconds>(endLed-endDark).count();
+	std::cout << "Dark pre-analysis time: " << diffDark << "s" << std::endl;
+	std::cout << "LED pre-analysis time: " << diffLed << "s" << std::endl;
+	std::cout << "Total pre-analysis time: " << diffLed + diffDark << "s" << std::endl;
+
+	// c->SaveAs((g_tmpPdf + "]").c_str());
 	for (TTree *t : forest)
 	{
 		t->SetEntries(1);
@@ -1532,7 +1653,7 @@ std::vector<std::vector<std::vector<highPeResult>>> gaussFitting(
 		std::vector<std::string> pico)
 {
 	TCanvas *c = new TCanvas();
-	c->SaveAs("/home/amiles/Documents/PhD/mppc-qc/plots/7-8-9_tmpGauss.pdf[");
+	c->SaveAs("/home/amiles/Documents/PhD/mppc-qc/plots/tmpGauss.pdf[");
 	std::vector<std::vector<std::vector<highPeResult>>> gaussFits;
 	for (TTree* t : forest)
 	{
@@ -1558,7 +1679,7 @@ std::vector<std::vector<std::vector<highPeResult>>> gaussFitting(
 		}
 		gaussFits.push_back(chGaussFits);
 	}
-	c->SaveAs("/home/amiles/Documents/PhD/mppc-qc/plots/7-8-9_tmpGauss.pdf]");
+	c->SaveAs("/home/amiles/Documents/PhD/mppc-qc/plots/tmpGauss.pdf]");
 	delete c;
 	return gaussFits;
 }
@@ -1596,7 +1717,7 @@ individualPeResult singleSetPoissFitting(TTree *t, std::string bias, std::string
 
 	double padding = (chargeMax - chargeMin) * 0.05;
 
-	return individualPeAnalysis(fullData, n, chargeMin - padding, chargeMax + padding, 500);
+	return individualPeAnalysis(fullData, n, chargeMin - padding, chargeMax + padding, g_nBins);
 	// XXX: global parameters for some of this should be used instead of hardcoded
 }
 
@@ -1606,7 +1727,7 @@ std::vector<std::vector<std::vector<individualPeResult>>> poissFitting(
 {
 	std::vector<std::vector<std::vector<individualPeResult>>> poissFits;
 	TCanvas *c = new TCanvas();
-	c->SaveAs("/home/amiles/Documents/PhD/mppc-qc/plots/7-8-9_tmpPoiss.pdf[");
+	c->SaveAs("/home/amiles/Documents/PhD/mppc-qc/plots/tmpPoiss.pdf[");
 	for (TTree* t : forest)
 	{
 		if (t == forest.at(3)) continue;
@@ -1634,12 +1755,12 @@ std::vector<std::vector<std::vector<individualPeResult>>> poissFitting(
 		}
 		poissFits.push_back(chPoissFits);
 	}
-	c->SaveAs("/home/amiles/Documents/PhD/mppc-qc/plots/7-8-9_tmpPoiss.pdf]");
+	c->SaveAs("/home/amiles/Documents/PhD/mppc-qc/plots/tmpPoiss.pdf]");
 	delete c;
 	return poissFits;
 }
 
-void genericAnalysis(std::string filePath, std::string outputPath)
+fileResults genericAnalysis(std::string filePath, std::string outputPath)
 {
 	TFile *file = TFile::Open((TString) filePath, "READ");
 
@@ -1650,7 +1771,9 @@ void genericAnalysis(std::string filePath, std::string outputPath)
 	std::vector<std::string>* picoscopeNames = (std::vector<std::string>*)file->Get("picoscopeNames");
 	std::vector<std::string>* mppcNumbers = (std::vector<std::string>*)file->Get("mppcNumbers");
 
-	std::string mppcStr = combineComponents("-", *mppcNumbers);
+	std::string fileName = filePath.substr(filePath.find_last_of("/") + 1);
+	std::string mppcStr = fileName.substr(0, fileName.size() - 5);
+	std::cout << mppcStr << std::endl;
 
 	TTree *treeBack = (TTree*) file->Get("treeBack");
 	TTree *treeMiddle = (TTree*) file->Get("treeMiddle");
@@ -1661,14 +1784,7 @@ void genericAnalysis(std::string filePath, std::string outputPath)
 
 	std::vector<std::string> allBias(*biasFullVec);
 	allBias.insert(allBias.end(), biasShortVec->begin(), biasShortVec->end());
-	// std::vector<std::string> allBias(biasFullVec->size() + biasShortVec->size());
-	// std::merge(biasFullVec->begin(), biasFullVec->end(), biasShortVec->begin(),
-	// 	biasShortVec->end(), allBias.begin());
 
-// for (std::string bias : *biasFullVec) std::cout << bias << std::endl;
-// for (std::string bias : *biasShortVec) std::cout << bias << std::endl;
-// 	for (std::string bias : allBias) std::cout << bias << std::endl;
-	
 	std::vector<double> ledShortX;
 	for (std::string led : *ledShortVec) ledShortX.push_back(std::stod(led));
 	std::vector<double> ledFullX;
@@ -1676,7 +1792,8 @@ void genericAnalysis(std::string filePath, std::string outputPath)
 
 	// 3D vectors: num channels (4) x num bias voltages x num applicable LED voltages
 	std::vector<std::vector<std::vector<highPeResult>>> gaussFits; // ALL LED V fits
-	std::vector<std::vector<std::vector<individualPeResult>>> poissFits; // only low PE LED V
+	std::vector<std::vector<std::vector<individualPeResult>>> poissFits; // only low PE LED V'
+	std::vector<std::vector<std::vector<darkResult>>> darkFits;
 	
 	while (outputPath.back() == '/')
 	{
@@ -1691,30 +1808,49 @@ void genericAnalysis(std::string filePath, std::string outputPath)
 	ROOT::Math::MinimizerOptions* minOpt = new ROOT::Math::MinimizerOptions();
 	minOpt->SetTolerance(0.001);
 
+	gStyle->SetStatW(0.14);
+	gStyle->SetStatH(0.14);
+	gStyle->SetStatX(0.4);
+	gStyle->SetStatY(0.85);
+	gStyle->SetOptStat(0);
+	gStyle->SetOptFit(11);
 	gaussFits = gaussFitting(dcp, forest, *picoscopeNames);
+
 	poissFits = poissFitting(dcp, forest, *picoscopeNames);
 
 	std::vector<std::vector<highPeResult>> pmtGauss = gaussFits.at(3);
+
+	fileResults res = {*mppcNumbers, dcp, gaussFits, poissFits, darkFits};
 
 	Ctmp->SaveAs(pdfFile + "[");
 
 	for (int i = 0 ; i < 3 ; i++)
 	{
-		TString title = TString("MPPC " + (*mppcNumbers).at(i) + " High PE");
+		TString title = TString("MPPC " + (*mppcNumbers).at(i) + " Intensity Dependence");
 		TCanvas *c = new TCanvas((TString)(*mppcNumbers).at(i), title);
 		c->cd();
 		TMultiGraph *mg = new TMultiGraph("mg", title.Data());
 		TLegend *leg = new TLegend(0.13, 0.48, 0.23, 0.88);
-		TGraph *gr;
 
 		std::vector<std::vector<highPeResult>> chGauss = gaussFits.at(i);
+		std::vector<std::vector<individualPeResult>> chPoiss = poissFits.at(i);
 
 		for (int j = 0 ; j < (int) chGauss.size() ; j++)
 		{
 			std::string bias = allBias.at(j);
 			std::vector<highPeResult> biasGauss = chGauss.at(j);
-			std::vector<double> x; // mean mppc / mean pmt
-			std::vector<double> y; // LED
+			std::vector<individualPeResult> biasPoiss = chPoiss.at(j);
+			std::vector<double> x; // mean pmt
+			std::vector<double> y1; // mean mppc [mV ns]
+			// std::vector<double> y2; // mean mppc [PE]
+			// double totalSep = 0;
+
+			// for (individualPeResult res : chPoiss)
+			// {
+			// 	totalSep += res.pePeakSeparation;
+			// }
+
+			// double meanSep = abs(totalSep) / chPoiss.size();
 
 			// if (biasGauss.size() == ledShortX.size())
 			// {
@@ -1727,17 +1863,22 @@ void genericAnalysis(std::string filePath, std::string outputPath)
 
 			for (int k = 0 ; k < (int) biasGauss.size() ; k++)
 			{
-				y.push_back(biasGauss.at(k).mean * -1);
+				y1.push_back(biasGauss.at(k).mean * -1);
+				// y2.push_back(biasGauss.at(k).mean * -1 / meanSep);
 				x.push_back(pmtGauss.at(j).at(k).mean * -1);
 			}
 
-			gr = new TGraph((Int_t) x.size(), x.data(), y.data());
+			TGraph *gr = new TGraph(x.size(), x.data(), y1.data());
 			gr->SetLineColor(j + 1);
 			gr->SetMarkerColor(j + 1);
+			gr->SetMarkerSize(0.75);
+			gr->SetMarkerStyle(8);
 			gr->SetFillColor(j + 1);
-			mg->Add(gr, "*PL");
+			mg->Add(gr, "PL");
 			leg->AddEntry(gr, bias.c_str(), "lp");
 		}
+		mg->GetXaxis()->SetTitle("PMT Signal [mV ns]");
+		mg->GetYaxis()->SetTitle("MPPC Signal [mV ns]");
 		mg->Draw("ALP");
 		leg->Draw();
 		c->Modified();
@@ -1745,16 +1886,177 @@ void genericAnalysis(std::string filePath, std::string outputPath)
 		c->SaveAs(pdfFile);
 	}
 	Ctmp->SaveAs(pdfFile + "]");
+	std::cout << g_maxPeaks << std::endl;
+	return res;
 }
 
-void tempAnalysis(std::string inputFolder,
-				  std::string filenamePattern,
-				  std::string outputFolder)
+void cycleAnalysis(std::string file1, std::string file2, std::string file3, 
+		std::string outputPath)
 {
-	// const Double_t highLed = std::stod(g_highestLed);
+	// We assume file 1 is a-b-c, file 2 c-a-b, file 3 is b-c-a
 
-	// environmentSample temp;
+	TCanvas *Ctmp = new TCanvas();
+
+	fileResults r1 = genericAnalysis(file1, outputPath);
+	fileResults r2 = genericAnalysis(file2, outputPath);
+	fileResults r3 = genericAnalysis(file3, outputPath);
+
+	while (outputPath.back() == '/')
+	{
+		outputPath.pop_back();
+	}
+
+	std::string pdfFile = outputPath + "/" + 
+			combineComponents("-", r1.mppcNumbers) + "_CycleAnalysis.pdf";
+
+	std::vector<std::string> allBias(r1.dcp.biasFullVec);
+	allBias.insert(allBias.end(), r1.dcp.biasShortVec.begin(), r1.dcp.biasShortVec.end());
+
+	Ctmp->SaveAs((pdfFile + "[").c_str());
+
+	for (int i = 0 ; i < 3 ; i++)
+	{
+		std::string mppcNumber = r1.mppcNumbers.at(i);
+		int mppcIndex1 = i;
+		int mppcIndex2;
+		int mppcIndex3;
+		auto checkR2 = std::find(r2.mppcNumbers.begin(), r2.mppcNumbers.end(), mppcNumber);
+		auto checkR3 = std::find(r3.mppcNumbers.begin(), r3.mppcNumbers.end(), mppcNumber);
+
+		if (checkR2 != r2.mppcNumbers.end())
+		{
+			mppcIndex2 = std::distance(r2.mppcNumbers.begin(), checkR2);
+		}
+		else
+		{
+			std::cout << "ERROR: MPPC Number " << mppcNumber << " is not found in "
+					<< file2 << std::endl;
+			exit(0);
+		}
+
+		if (checkR3 != r3.mppcNumbers.end())
+		{
+			mppcIndex3 = std::distance(r3.mppcNumbers.begin(), checkR3);
+		}
+		else
+		{
+			std::cout << "ERROR: MPPC Number " << mppcNumber << " is not found in "
+					<< file3 << std::endl;
+			exit(0);
+		}
+
+		// index 1 will be centre, 0 is furthest/mppc A, 2 is closest/mppc B
+		std::vector<fileResults> fVec(3);
+		fVec.at(mppcIndex1) = r1;
+		fVec.at(mppcIndex2) = r2;
+		fVec.at(mppcIndex3) = r3;
+
+		std::string titleA = "MPPC " + mppcNumber + " Further / Centre";
+		std::string titleC = "MPPC " + mppcNumber + " Closer / Centre";
+
+		TCanvas *c = new TCanvas();
+		TMultiGraph *mgA = new TMultiGraph("mgA", titleA.c_str());
+		TMultiGraph *mgC = new TMultiGraph("mgC", titleC.c_str());
+		TLegend *legA = new TLegend(0.78, 0.48, 0.88, 0.88);
+		TLegend *legC = new TLegend(0.78, 0.48, 0.88, 0.88);
+
+		std::vector<std::vector<highPeResult>> chGaussA = fVec.at(0).gaussFits.at(0);
+		std::vector<std::vector<highPeResult>> chGaussB = fVec.at(1).gaussFits.at(1);
+		std::vector<std::vector<highPeResult>> chGaussC = fVec.at(2).gaussFits.at(2);
+
+		std::vector<std::vector<highPeResult>> chPmtA = fVec.at(0).gaussFits.at(3);
+		std::vector<std::vector<highPeResult>> chPmtB = fVec.at(1).gaussFits.at(3);
+		std::vector<std::vector<highPeResult>> chPmtC = fVec.at(2).gaussFits.at(3);
+		// std::vector<std::vector<individualPeResult>> chPoiss = poissFits.at(i);
+
+		for (int j = 0 ; j < (int) chGaussB.size() ; j++)
+		{
+			std::string bias = allBias.at(j);
+			std::vector<highPeResult> biasGaussA = chGaussA.at(j);
+			std::vector<highPeResult> biasGaussB = chGaussB.at(j);
+			std::vector<highPeResult> biasGaussC = chGaussC.at(j);
+
+			std::vector<double> x; // mean pmt of mppc B
+			std::vector<double> yA; // mean mppc A / mppc B * pmt B / pmt A
+			std::vector<double> yC; // mean mppc C / mppc B * pmt B / pmt C
+
+			for (int k = 0 ; k < (int) biasGaussB.size() ; k++)
+			{
+				// y1.push_back(biasGaussB.at(k).mean * -1);
+				// y2.push_back(biasGauss.at(k).mean * -1 / meanSep);
+				yA.push_back(biasGaussA.at(k).mean / biasGaussB.at(k).mean * 
+						chPmtB.at(j).at(k).mean / chPmtA.at(j).at(k).mean);
+				yC.push_back(biasGaussC.at(k).mean / biasGaussB.at(k).mean * 
+						chPmtB.at(j).at(k).mean / chPmtC.at(j).at(k).mean);
+				x.push_back(chPmtB.at(j).at(k).mean * -1);
+			}
+
+			TGraph *grA = new TGraph(x.size(), x.data(), yA.data());
+			TGraph *grC = new TGraph(x.size(), x.data(), yC.data());
+			grA->SetLineColor(j + 1);
+			grA->SetMarkerColor(j + 1);
+			grA->SetMarkerSize(0.75);
+			grA->SetMarkerStyle(8);
+			grA->SetFillColor(j + 1);
+			grC->SetLineColor(j + 1);
+			grC->SetMarkerColor(j + 1);
+			grC->SetMarkerSize(0.75);
+			grC->SetMarkerStyle(8);
+			grC->SetFillColor(j + 1);
+
+			mgA->Add(grA, "PL");
+			mgC->Add(grC, "PL");
+			legA->AddEntry(grA, bias.c_str(), "lp");
+			legC->AddEntry(grC, bias.c_str(), "lp");
+		}
+		mgA->GetXaxis()->SetTitle("PMT Signal [mV ns]");
+		mgA->GetYaxis()->SetTitle("Further signal / Centre signal");
+		mgA->Draw("ALP");
+		legA->Draw();
+		c->Modified();
+		c->Update();
+		c->SaveAs(pdfFile.c_str());
+
+		mgC->GetXaxis()->SetTitle("PMT Signal [mV ns]");
+		mgC->GetYaxis()->SetTitle("Closer signal / Centre signal");
+		mgC->Draw("ALP");
+		legC->Draw();
+		c->Modified();
+		c->Update();
+		c->SaveAs(pdfFile.c_str());
+
+		delete mgA; delete mgC; delete legA; delete legC; delete c;
+	}
+	Ctmp->SaveAs((pdfFile + "]").c_str());
+	delete Ctmp;
 }
+
+// void tempAnalysis(std::string inputFolder,
+// 				  std::string filenamePattern,
+// 				  std::string outputFolder)
+// {
+// 	const Double_t highLed = std::stod(g_highestLed);
+
+// 	environmentSample temp;
+// }
+
+
+// XXX: Probably don't want to do this but it is good to keep in mind
+// PYBIND11_MODULE(analysis, m)
+// {
+//     m.doc() = "Picoscope 6000a DAQ System";
+
+//     m.def("runFullDAQ", &runFullDAQ, py::return_value_policy::copy);
+//     m.def("seriesInitDaq", &seriesInitDaq, py::return_value_policy::copy);
+//     m.def("seriesSetDaqSettings", &seriesSetDaqSettings, py::return_value_policy::copy);
+//     m.def("seriesCollectData", &seriesCollectData, py::return_value_policy::copy);
+//     m.def("seriesCloseDaq", &seriesCloseDaq, py::return_value_policy::copy);
+//     m.def("multiSeriesInitDaq", &multiSeriesInitDaq, py::return_value_policy::copy);
+//     m.def("multiSeriesSetDaqSettings", &multiSeriesSetDaqSettings, py::return_value_policy::copy);
+//     m.def("multiSeriesCollectData", &multiSeriesCollectData, py::return_value_policy::copy);
+//     m.def("multiSeriesCloseDaq", &multiSeriesCloseDaq, py::return_value_policy::copy);
+//     m.def("getSerials", &getSerials, py::return_value_policy::copy);
+// }
 
 ///////////////////////////////////////////////////////////////////////////////
 ///                              Main function                              ///
@@ -1762,13 +2064,7 @@ void tempAnalysis(std::string inputFolder,
 
 int main(int argc, char **argv)
 {
-	// testOutFile("/home/amiles/Documents/PhD/mppc-qc/pre-analyse/root-files/1-2-3.root");
-	// readEnvData("../data/temp20240726.txt");
-	// return 1;
-
 	col->SetRGB(0.5,0.5,0.5);
-	// genericAnalysis("/home/amiles/Documents/PhD/mppc-qc/pre-analyse/root-files/7-8-9.root",
-	// 				"/home/amiles/Documents/PhD/mppc-qc/plots/");return 1;
 	if (argc < 2)
 	{
 		std::cerr << "ERROR: you need at least 1 argument: 'batch-pre-analyse', 'pre-analyse' or 'analyse'..." << std::endl;
@@ -1800,284 +2096,27 @@ int main(int argc, char **argv)
 	}
 	else if (analysisType == "analyse")
 	{
-
-	}
-	else if (analysisType == "old-analyse")
-	{
-		if (argc != 7)
+		if (argc < 3)
 		{
-			std::cerr << "ERROR: you should have 7 parameters, please look in 'launch_analysis.sh'..." << std::endl;
+			std::cerr << "ERROR: you should have 3 parameters, please look in 'launch_analysis.sh'..." << std::endl;
 			return 1;
 		}
-		std::string analysisSubType(argv[2]);
-		if (analysisSubType == "maxPMT-maxMPPC")
+		std::string outputDir(argv[2]);
+		std::string inputFile(argv[3]);
+		genericAnalysis(inputFile, outputDir);
+	}
+	else if (analysisType == "cycle-analyse")
+	{
+		if (argc < 3)
 		{
-			std::string date(argv[3]);
-			std::string MPPCsNumbers(argv[4]);
-			std::string directory0(argv[5]);
-			std::string directory1(argv[6]);
-			for (int i0(0); i0 < (int)MPPCsHV.size(); ++i0)
-			{
-				for (int i1(0); i1 < (int)picoscopeNames.size(); ++i1)
-				{
-					clock_t startTime, endTime;
-					std::cout << "\n######### Starting analysis: PMT maximum VS PMT voltage & MPPCs maximum VS LED voltage" << std::endl;
-					startTime = clock();
-					std::cout << "###### Starting setting up histograms..." << std::endl;
-					std::vector<std::vector<std::vector<TH1D *>>> integratedChargeTensor;
-					for (int i2(0); i2 < (int)LEDV.size(); ++i2)
-					{
-						std::vector<std::vector<TH1D *>> integratedChargeMatrix;
-						for (int i3(0); i3 < (int)PMTV.size(); ++i3)
-						{
-							std::vector<TH1D *> integratedChargeVec;
-							for (int i4(0); i4 < 4; ++i4)
-							{
-								std::string fileNameBase(date + "_" + MPPCsHV[i0] + "_" + LEDV[i2] + "_" + PMTV[i3] + "_" + MPPCsNumbers + "_" + picoscopeNames[i1]);
-								TH1D *integratedChargeHisto = new TH1D();
-								TString ch(std::string(1, 'A' + i4));
-								integratedChargeHisto->SetName(fileNameBase + "_ch" + ch);
-								integratedChargeHisto->SetTitle(";Q [mV.ns];count");
-								integratedChargeHisto->SetBins(100, 0, 100);
-								integratedChargeVec.push_back(integratedChargeHisto);
-							}
-							integratedChargeMatrix.push_back(integratedChargeVec);
-						}
-						integratedChargeTensor.push_back(integratedChargeMatrix);
-					}
-					std::vector<TH1D *> maxMPPCvsLEDVVec;
-					std::vector<TH1D *> maxMPPCvsLEDVVecNorm;
-					std::vector<TH1D *> maxPMTvsPMTVVec;
-					for (int i2(0); i2 < 4; ++i2)
-					{
-						std::string ch(std::string(1, 'A' + i2));
-						TString name("maxMPPCvsLEDV_" + date + "_" + MPPCsHV[i0] + "_" + MPPCsNumbers + "_" + picoscopeNames[i1] + "_ch" + ch);
-						TH1D *maxMPPCvsLEDV = new TH1D();
-						maxMPPCvsLEDV->SetName(name);
-						maxMPPCvsLEDV->SetTitle(";U_{LED} [mV];max_{MPPC} [mV]");
-						maxMPPCvsLEDV->SetBins(100, 800, 900);
-						maxMPPCvsLEDVVec.push_back(maxMPPCvsLEDV);
-						name = "maxMPPCvsLEDVNorm_" + date + "_" + MPPCsHV[i0] + "_" + MPPCsNumbers + "_" + picoscopeNames[i1] + "_ch" + ch;
-						TH1D *maxMPPCvsLEDVNorm = new TH1D();
-						maxMPPCvsLEDVNorm->SetName(name);
-						maxMPPCvsLEDVNorm->SetTitle(";U_{LED} [mV];count");
-						maxMPPCvsLEDVNorm->SetBins(100, 800, 900);
-						maxMPPCvsLEDVVecNorm.push_back(maxMPPCvsLEDVNorm);
-						if (i2 == 3)
-						{
-							for (int i3(0); i3 < (int)LEDV.size(); ++i3)
-							{
-								TString name("maxPMTvsPMTV_" + date + "_" + MPPCsHV[i0] + "_" + LEDV[i3] + "_" + MPPCsNumbers + "_" + picoscopeNames[i1]);
-								TH1D *maxPMTvsPMTV = new TH1D();
-								maxPMTvsPMTV->SetName(name);
-								maxPMTvsPMTV->SetTitle(";U_{PMT} [kV];max_{PMT} [mV]");
-								maxPMTvsPMTV->SetBins(300, 1.2, 1.5);
-								maxPMTvsPMTVVec.push_back(maxPMTvsPMTV);
-							}
-						}
-					}
-					std::cout << "###### Finished setting up histograms..." << std::endl;
-					std::cout << "###### Starting formating pre-analysed data..." << std::endl;
-					bool canBeAnalysed(false);
-					for (int i2(0); i2 < (int)LEDV.size(); ++i2)
-					{
-						for (int i3(0); i3 < (int)PMTV.size(); ++i3)
-						{
-							std::string fileNameBase(date + "_" + MPPCsHV[i0] + "_" + LEDV[i2] + "_" + PMTV[i3] + "_" + MPPCsNumbers + "_" + picoscopeNames[i1]);
-							std::string fileToProcess(directory0 + "root-files/" + fileNameBase + ".root");
-							if (isExisting(fileToProcess) != true)
-							{
-								std::cout << "WARNING: the file '" + fileToProcess + "' does not exist..." << std::endl;
-								continue;
-							}
-							else
-							{
-								canBeAnalysed = true;
-								std::cout << "### Formating file: " + fileToProcess << std::endl;
-								TFile *file = TFile::Open((TString)fileToProcess);
-								if (!file)
-								{
-									std::cout << "ERROR: could not open '" << fileToProcess << "'..." << std::endl;
-									return 1;
-								}
-								tree = dynamic_cast<TTree *>(file->Get("tree"));
-								if (!tree)
-								{
-									std::cout << "ERROR: could not find 'tree'..." << std::endl;
-									return 1;
-								}
-								tree->SetBranchAddress("channel", &channel);
-								tree->SetBranchAddress("integratedCharge", &integratedCharge);
-								Long64_t nRows(tree->GetEntries());
-								double maxIntegratedCharge(0), minIntegratedCharge(0);
-								for (int i4(0); i4 < nRows; ++i4)
-								{
-									tree->GetEntry(i4);
-									if (integratedCharge > maxIntegratedCharge)
-									{
-										maxIntegratedCharge = integratedCharge;
-									}
-									if (integratedCharge < minIntegratedCharge)
-									{
-										minIntegratedCharge = integratedCharge;
-									}
-								}
-								for (int i4(0); i4 < 4; ++i4)
-								{
-									integratedChargeTensor[i2][i3][i4]->SetBins(300, minIntegratedCharge, maxIntegratedCharge);
-								}
-								for (int i4(0); i4 < nRows; ++i4)
-								{
-									tree->GetEntry(i4);
-									integratedChargeTensor[i2][i3][channel]->Fill(integratedCharge);
-								}
-							}
-						}
-					}
-					std::cout << "###### Finished formating pre-analysed data..." << std::endl;
-					if (canBeAnalysed == true)
-					{
-						std::cout << "###### Starting plotting analysis histograms..." << std::endl;
-						for (int i2(0); i2 < (int)LEDV.size(); ++i2)
-						{
-							for (int i3(0); i3 < (int)PMTV.size(); ++i3)
-							{
-								for (int i4(0); i4 < 4; ++i4)
-								{
-									// double maximumY(0);
-									double maximumX(0);
-									/*for(int i5(1); i5<=integratedChargeTensor[i2][i3][i4]->GetNbinsX(); ++i5){
-										if(maximumY < integratedChargeTensor[i2][i3][i4]->GetBinContent(i5)){
-											maximumY = integratedChargeTensor[i2][i3][i4]->GetBinContent(i5);
-											maximumX = integratedChargeTensor[i2][i3][i4]->GetXaxis()->GetBinCenter(i5);
-										}
-									}*/
-									maximumX = integratedChargeTensor[i2][i3][i4]->GetMean();
-									if (LEDV[i2] != "Dark")
-									{
-										std::string ledVoltage(LEDV[i2]);
-										ledVoltage.erase(ledVoltage.end() - 2, ledVoltage.end());
-										maxMPPCvsLEDVVec[i4]->Fill(std::stod(ledVoltage), maximumX);
-										maxMPPCvsLEDVVecNorm[i4]->Fill(std::stod(ledVoltage));
-									}
-									if (LEDV[i2] != "Dark" && i4 == 3)
-									{
-										std::string pmtVoltage(PMTV[i3]);
-										pmtVoltage.erase(pmtVoltage.end() - 2, pmtVoltage.end());
-										maxPMTvsPMTVVec[i2]->Fill(std::stod(pmtVoltage), maximumX);
-									} /*else{
-										 std::cout<<"WARNING: no maximum found in the integrated charge distribution for file '"<<date+"_"+MPPCsHV[i0]+"_"+LEDV[i2]+"_"+PMTV[i3]+"_"+MPPCsNumbers+"_"+picoscopeNames[i1]<<".root'..."<<std::endl;
-									 }*/
-								}
-							}
-						}
-						std::cout << "###### Finished plotting analysis histograms..." << std::endl;
-						std::cout << "###### Starting saving..." << std::endl;
-						for (int i2(0); i2 < (int)maxMPPCvsLEDVVec.size(); ++i2)
-						{
-							maxMPPCvsLEDVVec[i2]->Divide(maxMPPCvsLEDVVec[i2], maxMPPCvsLEDVVecNorm[i2], 1, 1);
-							for (int i3(1); i3 <= maxMPPCvsLEDVVec[i2]->GetNbinsX(); ++i3)
-							{
-								maxMPPCvsLEDVVec[i2]->SetBinError(i3, 0.01 * maxMPPCvsLEDVVec[i2]->GetBinContent(i3));
-							}
-							TString outputDirectory(directory1);
-							TString name(maxMPPCvsLEDVVec[i2]->GetName());
-							TString pdfFile(name + ".pdf");
-							TCanvas *Ctmp = new TCanvas("temp", "temp", 100, 100);
-							Ctmp->SaveAs(outputDirectory + pdfFile + "[");
-							saveInPDF(outputDirectory, pdfFile,
-									  drawCanvas(maxMPPCvsLEDVVec[i2]->GetName(), maxMPPCvsLEDVVec[i2],
-												 maxMPPCvsLEDVVec[i2]->GetName()),
-									  "logNot");
-							Ctmp->SaveAs(outputDirectory + pdfFile + "]");
-							delete Ctmp;
-						}
-						THStack *maxPMTvsPMTV = new THStack();
-						TString name("maxPMTvsPMTV_" + date + "_" + MPPCsHV[i0] + "_" + MPPCsNumbers + "_" + picoscopeNames[i1]);
-						maxPMTvsPMTV->SetName(name);
-						maxPMTvsPMTV->SetTitle(";U_{PMT} [kV];max_{PMT}");
-						for (int i2(0); i2 < (int)maxPMTvsPMTVVec.size(); ++i2)
-						{
-							for (int i3(1); i3 <= maxPMTvsPMTVVec[i2]->GetNbinsX(); ++i3)
-							{
-								maxPMTvsPMTVVec[i2]->SetBinError(i3, 0.05 * maxPMTvsPMTVVec[i2]->GetBinContent(i3));
-								if (maxPMTvsPMTVVec[i2]->GetBinContent(i3) != 0)
-								{
-									std::cout << maxPMTvsPMTVVec[i2]->GetBinContent(i3) << " / ";
-								}
-							}
-							std::cout << std::endl;
-							maxPMTvsPMTV->Add(maxPMTvsPMTVVec[i2]);
-						}
-						TString outputDirectory(directory1);
-						TString pdfFile(name + ".pdf");
-						TCanvas *Ctmp = new TCanvas("temp", "temp", 100, 100);
-						Ctmp->SaveAs(outputDirectory + pdfFile + "[");
-						saveInPDF(outputDirectory, pdfFile,
-								  drawStackCanvas(maxPMTvsPMTV->GetName(), maxPMTvsPMTV,
-												  maxPMTvsPMTV->GetName()),
-								  "logNot");
-						Ctmp->SaveAs(outputDirectory + pdfFile + "]");
-						delete Ctmp;
-						std::cout << "###### Finished saving..." << std::endl;
-					}
-					else
-					{
-						std::cout << "###### No analysis needed..." << std::endl;
-					}
-					endTime = clock();
-					std::cout << "###### Finished analysis: " << (float)(endTime - startTime) / CLOCKS_PER_SEC << "s\n"
-							  << std::endl;
-				}
-			}
+			std::cerr << "ERROR: you should have 5 parameters, please look in 'launch_analysis.sh'..." << std::endl;
+			return 1;
 		}
-		else if (analysisSubType == "reproducibility")
-		{
-			std::cout << "Sorry this is not supported yet..." << std::endl;
-		}
-		else if (analysisSubType == "position_dependency")
-		{
-			std::cout << "Sorry this is not supported yet..." << std::endl;
-		}
-		else if (analysisSubType == "temperature_dependency")
-		{
-			std::cout << "Sorry this is not supported yet..." << std::endl;
-		}
-		else if (analysisSubType == "QC")
-		{
-			std::cout << "Sorry this is not supported yet..." << std::endl;
-			std::string datesList(argv[3]);
-			std::string MPPCsNumbersList(argv[4]);
-			std::string directory0(argv[5]);
-			std::string directory1(argv[6]);
-			std::vector<std::string> dates;
-			std::vector<std::string> mppcs;
-			std::vector<TH2D *> maxMPPCvsmaxPMT;
-			for (int i0(0); i0 < (int)dates.size(); ++i0)
-			{
-				for (int i1(0); i1 < (int)MPPCsHV.size(); ++i1)
-				{
-					for (int i2(0); i2 < (int)LEDV.size(); ++i2)
-					{
-						for (int i3(0); i3 < (int)PMTV.size(); ++i3)
-						{
-							for (int i4(0); i4 < (int)mppcs.size(); ++i4)
-							{
-								for (int i5(0); i5 < (int)picoscopeNames.size(); ++i5)
-								{
-								}
-							}
-						}
-					}
-				}
-			}
-		}
-		else
-		{
-			std::cout << "Analysis type: " << analysisSubType << " is not a valid type" << std::endl;
-			std::cout << "Valid analysis types: analyse <maxPMT-maxMPPC | reproducibility"
-					  << " | position_dependency | temperature_dependency | QC>" << std::endl;
-		}
+		std::string outputDir(argv[2]);
+		std::string inputFile1(argv[3]);
+		std::string inputFile2(argv[4]);
+		std::string inputFile3(argv[5]);
+		cycleAnalysis(inputFile1, inputFile2, inputFile3, outputDir);
 	}
 	return 0;
 }

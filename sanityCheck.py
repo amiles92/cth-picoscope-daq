@@ -107,6 +107,12 @@ def readDataAdc(f, d):
 
     return data
 
+def readFile(fname):
+    with open(fname, 'rb') as f:
+        header = readHeader(f)
+        data = readDataAdc(f, header)
+    return header, data
+
 def integrate(chData, chBaseline):
     dim = chData.shape
     argMin = np.argmin(chData, axis=1, keepdims=True)

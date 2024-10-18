@@ -1,17 +1,13 @@
 #ifndef constants_h
 #define constants_h
 
-#define PI2_CONST 0.636619772367581343075535053490057448L
-
 #include <algorithm>
 #include <array>
 #include <bitset>
 #include <cmath>
 #include <cstdio>
 #include <ctime>
-// #include <time.h>
-// #include <chrono>
-// #include <direct.h>
+#include <chrono>
 #include <fstream>
 #include <iomanip>
 #include <iostream>
@@ -52,7 +48,6 @@
 #include "TTreeReaderArray.h"
 #include "TVectorD.h"
 #include "TROOT.h"
-// #include "TRint.h"
 #include "Math/MinimizerOptions.h"
 
 struct sample
@@ -158,7 +153,6 @@ struct highPeResult
 	double amplitude;  double uAmplitude;
 	double mean;       double uMean;
 	double sigma;      double uSigma;
-	//thats it? Could just use gaussParams?
 };
 
 struct darkResult
@@ -167,6 +161,41 @@ struct darkResult
 	double mean;       double uMean;
 	double sigma;      double uSigma;
 	// placeholder for the moment
+};
+
+struct fileResults
+{
+	std::vector<std::string> mppcNumbers;
+	dataCollectionParameters dcp;
+	std::vector<std::vector<std::vector<highPeResult>>> gaussFits;
+	std::vector<std::vector<std::vector<individualPeResult>>> poissFits;
+	std::vector<std::vector<std::vector<darkResult>>> darkFits;
+};
+
+const double g_2pi = 2 * 3.14159265358979323846264338327950288419716939937510582097494459230781640628620899L;
+
+const int64_t factorialLookUp[21] = {
+	1,
+	1,
+	2,
+	6,
+	24,
+	120,
+	720,
+	5040,
+	40320,
+	362880,
+	3628800,
+	39916800,
+	479001600,
+	6227020800,
+	87178291200,
+	1307674368000,
+	20922789888000,
+	355687428096000,
+	6402373705728000,
+	121645100408832000,
+	2432902008176640000
 };
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -212,11 +241,11 @@ const dataCollectionParameters g_dcp{biasFullVec, ledFullVec, biasShortVec, ledS
 ///////////////////////////////////////////////////////////////////////////////
 
 const uint32_t g_baselineLowerWindow = 0;
-const uint32_t g_baselineUpperWindow = 50;
+const uint32_t g_baselineUpperWindow = 100; // so fitting is a bit more reliable
 const uint32_t g_integratedLowerWindow = 160;
 const uint32_t g_integratedUpperWindow = 210;
 
-const bool doMovingAverage(false);
+// const bool doMovingAverage(false);
 const bool plotFirstWaveforms(false); // TODO: Implement this??
 
 // XXX: TO REMOVE
@@ -244,7 +273,12 @@ const std::vector<std::vector<std::string>> titles{{"First 100 waveforms for ch"
 // XXX: g_saveAllPlots unimplemented so far
 const bool g_saveAllPlots = true; // save all produced hists to chonky pdf, recommend leave off unless debugging
 const int g_highPeCutoff = 845; // LED values below are treated as individual PE,  above is high PE
+const int g_nBins = 500;
 
 TColor *col = gROOT->GetColor(10);
+
+const std::string g_tmpPdf = "/home/amiles/Documents/PhD/mppc-qc/plots/7-8-9_tmpbase.pdf";
+int g_plots = 0;
+int g_maxPeaks = 0;
 
 #endif // constants_h
