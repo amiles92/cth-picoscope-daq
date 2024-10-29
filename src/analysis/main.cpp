@@ -38,6 +38,23 @@ std::string combineComponents(const std::string delim, const std::vector<std::st
 	return outString;
 }
 
+template <typename T>
+std::vector<std::vector<T>> transpose2DVector(std::vector<std::vector<T>> arr)
+{
+	int outD1 = arr.at(0).size();
+	int outD2 = arr.size();
+	std::vector<std::vector<T>> outArr(outD1, std::vector<T>(outD2));
+	
+	for (int i = 0 ; i < outD1 ; i++)
+	{
+		for (int j = 0 ; j < outD2 ; j++)
+		{
+			outArr.at(i).at(j) = arr.at(j).at(i);
+		}
+	}
+	return outArr;
+}
+
 ///////////////////////////////////////////////////////////////////////////////
 ///                          Extraction functions                           ///
 ///////////////////////////////////////////////////////////////////////////////
@@ -883,7 +900,7 @@ double poissGaussDistribution(double x, double ampl, double lambda, double mu0,
 	{
 		std::cout << "NOTE: n! loses int64 precision at this level (n > 20)" << std::endl;
 	}
-	total += ampl0 * gaussDistribution(x, mu0, sigma0);
+	total += ampl0 * gaussDistribution(x, mu0, sigmaPe);
 	for (int i = 1 ; i < nPeaks ; i++) // Fit 1st peak on
 	{
 		if (i < 21) // factorial loses int64 precision at this level
@@ -950,8 +967,8 @@ individualPeResult individualPeAnalysis(const double* data, const int nWfs,
 		fn->FixParameter(6, i);
 		fn->SetParameter(7, 500);
 		fn->SetParLimits(7, 50, nWfs);
-		fn->SetParameter(8, 2);
-		fn->SetParLimits(8, 0.1, 12);
+		fn->FixParameter(8, 2); //XXX: temp fix to test peak fitting
+		// fn->SetParLimits(8, 0.1, 12);
 		for (int j = 0 ; j < 9 ; j++) fn->SetParError(j, 0);
 
 		TFitResultPtr res = hist->Fit(fn, "SWMQ");
@@ -964,7 +981,7 @@ individualPeResult individualPeAnalysis(const double* data, const int nWfs,
 				   	   res->Parameter(3), res->ParError(3),
 				   	   res->Parameter(4), res->ParError(4),
 				   	   res->Parameter(5), res->ParError(5), 
-					   i};
+					   i, tmpChi2};
 			bestChi2 = tmpChi2;
 			bestHist = (TH1D*) hist->Clone();
 			bestIndex = i;
@@ -1018,6 +1035,43 @@ highPeResult highPeAnalysis(const double* data, const int nWfs,
 	delete c;
 
 	return a;
+}
+
+environmentSample getSampleInterp(std::vector<environmentSample> envData, int32_t timestamp)
+{
+	environmentSample timestampEnv = {timestamp, 0.0, 0.0, 0.0};
+
+	std::sort(envData.begin(), envData.end()); // ensure it is sorted
+
+	environmentSample aboveSample = *std::upper_bound(envData.begin(), 
+			envData.end(), timestampEnv);//, environmentSampleIntComparator);
+
+	environmentSample belowSample = *std::lower_bound(envData.begin(), 
+			envData.end(), timestampEnv);//, environmentSampleIntComparator);
+
+	// interpolate between closest samples
+
+	int32_t timestep = aboveSample.timestamp - belowSample.timestamp;
+	double lowFrac = (timestamp - belowSample.timestamp) / timestep;
+	double highFrac = 1 - lowFrac;
+
+	environmentSample interpSample = {timestamp, 
+		aboveSample.temperature * highFrac + belowSample.temperature * lowFrac,
+		aboveSample.humidity * highFrac + belowSample.humidity * lowFrac,
+		aboveSample.pressure * highFrac + belowSample.pressure * lowFrac
+	};
+
+	std::cout << "timestep: " << timestep << std::endl;
+	std::cout << "lowFrac: " << lowFrac << std::endl;
+	std::cout << "highFrac: " << highFrac << std::endl;
+	std::cout << "timestamp: " << timestamp << std::endl;
+	std::cout << "temp: " << interpSample.temperature << std::endl;
+	std::cout << "humidity: " << interpSample.humidity << std::endl;
+	std::cout << "press: " << interpSample.pressure << std::endl;
+	std::cout << "aboveSample.time: " << aboveSample.timestamp << std::endl;
+	std::cout << "belowSample.time: " << belowSample.timestamp << std::endl;
+
+	return interpSample;
 }
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -1276,6 +1330,60 @@ void fillingAndSavingTree(const std::string fileNameBase,
 	file->Close();
 }
 
+void saveMultiGraph(std::string outputFile, std::string title,
+		std::vector<std::vector<double>> xArr, std::vector<std::vector<double>> yArr,
+		std::string xLabel, std::string yLabel, std::vector<std::string> labels,
+		TLegend *leg = NULL)
+{
+	std::cout << "###### Creating multi-graph: " << title << std::endl;
+	if (xArr.size() != yArr.size() || (xArr.size() != labels.size() && labels.size() > 0))
+	{
+		std::cout << "ERROR: Number of TMultiGraph entries inconsistent!" << std::endl;
+		std::cout << "Size of 1st dimension of x array: " << xArr.size() << std::endl;
+		std::cout << "Size of 1st dimension of y array: " << yArr.size() << std::endl;
+		std::cout << "Size of labels array: " << labels.size() << std::endl;
+		exit(1);
+	}
+
+	TCanvas *c = new TCanvas("c1", title.c_str());
+	c->cd();
+	TMultiGraph *mg = new TMultiGraph("mg", title.c_str());
+	if (leg == NULL && labels.size() > 0)
+	{
+		leg = new TLegend(0.13, 0.48, 0.23, 0.88);
+	}
+
+	for (int i = 0 ; i < (int) xArr.size() ; i++)
+	{
+		std::vector<double> x = xArr.at(i);
+		std::vector<double> y = yArr.at(i);
+
+		TGraph *gr = new TGraph(x.size(), x.data(), y.data());
+		gr->SetLineColor(i + 1);
+		gr->SetMarkerColor(i + 1);
+		gr->SetMarkerSize(0.75);
+		gr->SetMarkerStyle(8);
+		gr->SetFillColor(i + 1);
+		mg->Add(gr, "PL");
+		if (labels.size() > 0)
+		{
+			leg->AddEntry(gr, labels.at(i).c_str(), "lp");
+		}
+	}
+	mg->GetXaxis()->SetTitle(xLabel.c_str());
+	mg->GetYaxis()->SetTitle(yLabel.c_str());
+	mg->Draw("ALP");
+	if (labels.size() > 0)
+	{
+		leg->Draw();
+	}
+	c->Modified();
+	c->Update();
+	c->SaveAs(outputFile.c_str());
+	delete leg; delete mg; delete c;
+	return;
+}
+
 ///////////////////////////////////////////////////////////////////////////////
 ///                         Analysis mode functions                         ///
 ///////////////////////////////////////////////////////////////////////////////
@@ -1415,12 +1523,17 @@ void darkPreAnalysis(std::string directory, std::string date, std::string mppcSt
 
 				asprintf(&leaflist, "data[%i]/D", wfs);
 
-				// TODO: FINISH THIS
 				TBranch *b = forest.at(i0)->Branch(branchNameCharge.c_str(), 
 							 outData + i0 * wfs, (const char *) leaflist);
 				b->Fill();
 			}
 			free(outData);
+
+			std::string branchNameTimestamp = combineComponents("_", {bias, "Dark", pico});
+
+			TBranch *b = forest.at(4)->Branch(branchNameTimestamp.c_str(),
+					&(header.timestamp), "unix/I");
+			b->Fill();
 
 			std::cout << "###### Written branches to trees\n" << std::endl;
 		}
@@ -1482,6 +1595,12 @@ void ledPreAnalysisFile(std::string filePath, std::string bias,
 		bV->Fill();
 	}
 	free(outData);
+
+	std::string branchNameTimestamp = combineComponents("_", {bias, led, pico});
+
+	TBranch *b = forest.at(4)->Branch(branchNameTimestamp.c_str(),
+			&(header.timestamp), "unix/I");
+	b->Fill();
 
 	std::cout << "###### Written branches to trees\n" << std::endl;
 
@@ -1555,14 +1674,15 @@ void preAnalyseFolder(std::string directory, std::string date, std::string outpu
 	asprintf(&mppcMiddle, "%s%s", mppcTitle, mppcVec.at(1).c_str());
 	asprintf(&mppcFront, "%s%s", mppcTitle, mppcVec.at(2).c_str());
 
-	TFile *file = TFile::Open((TString)outputFile + "_test.root", "RECREATE");
+	TFile *file = TFile::Open((TString)outputFile + ".root", "RECREATE");
 
 	TTree *treeBack = new TTree("treeBack", mppcBack);
 	TTree *treeMiddle = new TTree("treeMiddle", mppcMiddle);
 	TTree *treeFront = new TTree("treeFront", mppcFront);
 	TTree *treePmt = new TTree("treePmt", "Charateristics of PMT");
+	TTree *treeTimestamps = new TTree("treeTimestamps", "Timestamps");
 	// tree->Branch("channel", &channel, "channel/I");
-	std::vector<TTree *> forest{treeBack, treeMiddle, treeFront, treePmt};
+	std::vector<TTree *> forest{treeBack, treeMiddle, treeFront, treePmt, treeTimestamps};
 
 	// TODO: Header/metadata info
 
@@ -1606,6 +1726,7 @@ void preAnalyseFolder(std::string directory, std::string date, std::string outpu
 	treeMiddle->Write();
 	treeFront->Write();
 	treePmt->Write();
+	treeTimestamps->Write();
 	file->Close();
 
 	std::cout << "### File closed" << std::endl;
@@ -1760,7 +1881,52 @@ std::vector<std::vector<std::vector<individualPeResult>>> poissFitting(
 	return poissFits;
 }
 
-fileResults genericAnalysis(std::string filePath, std::string outputPath)
+std::vector<std::vector<int32_t>> timestampExtraction(
+		dataCollectionParameters &dcp, TTree* t,
+		std::vector<std::string> pico)
+{
+	std::vector<std::vector<int32_t>> timestamps;
+
+	for (std::string bias : dcp.biasFullVec)
+	{
+		std::vector<int32_t> biasTimestamps;
+		for (std::string led : dcp.ledShortVec)
+		{
+			std::string s1 = bias + "_" + led + "_" + pico.at(0) + ".unix";
+			std::string s2 = bias + "_" + led + "_" + pico.at(1) + ".unix";
+			TTreeReader reader(t);
+			TTreeReaderValue<int32_t> t1(reader, s1.c_str());
+			TTreeReaderValue<int32_t> t2(reader, s2.c_str());
+			reader.Next();
+			int32_t t = *t1 + (*t2 - *t1) / 2;
+			if (t < 0) {std::cout << "timestamp is negative" << std::endl; throw "";}
+			biasTimestamps.push_back(t);
+		}
+		timestamps.push_back(biasTimestamps);
+	}
+
+	for (std::string bias : dcp.biasShortVec)
+	{
+		std::vector<int32_t> biasTimestamps;
+		for (std::string led : dcp.ledFullVec)
+		{
+			std::string s1 = bias + "_" + led + "_" + pico.at(0) + ".unix";
+			std::string s2 = bias + "_" + led + "_" + pico.at(1) + ".unix";
+			TTreeReader reader(t);
+			TTreeReaderValue<int32_t> t1(reader, s1.c_str());
+			TTreeReaderValue<int32_t> t2(reader, s2.c_str());
+			reader.Next();
+			int32_t t = *t1 + (*t2 - *t1) / 2;
+			if (t < 0) {std::cout << "timestamp is negative" << std::endl; throw "";}
+			biasTimestamps.push_back(t);
+		}
+		timestamps.push_back(biasTimestamps);
+	}
+
+	return timestamps;
+}
+
+fileResults genericAnalysis(std::string filePath, std::string outputDir, bool fit)
 {
 	TFile *file = TFile::Open((TString) filePath, "READ");
 
@@ -1779,6 +1945,7 @@ fileResults genericAnalysis(std::string filePath, std::string outputPath)
 	TTree *treeMiddle = (TTree*) file->Get("treeMiddle");
 	TTree *treeFront = (TTree*) file->Get("treeFront");
 	TTree *treePmt = (TTree*) file->Get("treePmt");
+	TTree *treeTimestamps = (TTree*) file->Get("treeTimestamps");
 
 	std::vector<TTree*> forest = {treeBack, treeMiddle, treeFront, treePmt};
 
@@ -1794,14 +1961,16 @@ fileResults genericAnalysis(std::string filePath, std::string outputPath)
 	std::vector<std::vector<std::vector<highPeResult>>> gaussFits; // ALL LED V fits
 	std::vector<std::vector<std::vector<individualPeResult>>> poissFits; // only low PE LED V'
 	std::vector<std::vector<std::vector<darkResult>>> darkFits;
+	std::cout << "Grabbing tstamps" << std::endl;
+	std::vector<std::vector<int32_t>> timestamps;
+	std::cout << "Grabbed  tstamps" << std::endl;
 	
-	while (outputPath.back() == '/')
+	while (outputDir.back() == '/')
 	{
-		outputPath.pop_back();
+		outputDir.pop_back();
 	}
 
-	TString pdfFile(outputPath + "/" + mppcStr + ".pdf");
-	TCanvas *Ctmp = new TCanvas("temp", "temp", 100, 100);
+	TString pdfFile(outputDir + "/" + mppcStr + ".pdf");
 
 	dataCollectionParameters dcp = {*biasFullVec, *ledFullVec, *biasShortVec, *ledShortVec};
 
@@ -1818,10 +1987,20 @@ fileResults genericAnalysis(std::string filePath, std::string outputPath)
 
 	poissFits = poissFitting(dcp, forest, *picoscopeNames);
 
+	timestamps = timestampExtraction(dcp, treeTimestamps, *picoscopeNames);
+	
+	fileResults res = {*mppcNumbers, dcp, timestamps, gaussFits, poissFits, darkFits};
+
+	if (!fit)
+	{
+		file->Close();
+		delete minOpt;
+		return res;
+	}
+
 	std::vector<std::vector<highPeResult>> pmtGauss = gaussFits.at(3);
 
-	fileResults res = {*mppcNumbers, dcp, gaussFits, poissFits, darkFits};
-
+	TCanvas *Ctmp = new TCanvas("temp", "temp", 100, 100);
 	Ctmp->SaveAs(pdfFile + "[");
 
 	for (int i = 0 ; i < 3 ; i++)
@@ -1876,6 +2055,7 @@ fileResults genericAnalysis(std::string filePath, std::string outputPath)
 			gr->SetFillColor(j + 1);
 			mg->Add(gr, "PL");
 			leg->AddEntry(gr, bias.c_str(), "lp");
+			// delete gr;
 		}
 		mg->GetXaxis()->SetTitle("PMT Signal [mV ns]");
 		mg->GetYaxis()->SetTitle("MPPC Signal [mV ns]");
@@ -1884,29 +2064,38 @@ fileResults genericAnalysis(std::string filePath, std::string outputPath)
 		c->Modified();
 		c->Update();
 		c->SaveAs(pdfFile);
+		delete leg; delete mg; delete c;
 	}
 	Ctmp->SaveAs(pdfFile + "]");
 	std::cout << g_maxPeaks << std::endl;
+	delete Ctmp; delete minOpt;
+
+	file->Close();
 	return res;
 }
 
+fileResults genericAnalysis(std::string filePath, std::string outputDir)
+{
+	return genericAnalysis(filePath, outputDir, true);
+}
+
 void cycleAnalysis(std::string file1, std::string file2, std::string file3, 
-		std::string outputPath)
+		std::string outputDir)
 {
 	// We assume file 1 is a-b-c, file 2 c-a-b, file 3 is b-c-a
 
 	TCanvas *Ctmp = new TCanvas();
 
-	fileResults r1 = genericAnalysis(file1, outputPath);
-	fileResults r2 = genericAnalysis(file2, outputPath);
-	fileResults r3 = genericAnalysis(file3, outputPath);
+	fileResults r1 = genericAnalysis(file1, outputDir, false);
+	fileResults r2 = genericAnalysis(file2, outputDir, false);
+	fileResults r3 = genericAnalysis(file3, outputDir, false);
 
-	while (outputPath.back() == '/')
+	while (outputDir.back() == '/')
 	{
-		outputPath.pop_back();
+		outputDir.pop_back();
 	}
 
-	std::string pdfFile = outputPath + "/" + 
+	std::string pdfFile = outputDir + "/" + 
 			combineComponents("-", r1.mppcNumbers) + "_CycleAnalysis.pdf";
 
 	std::vector<std::string> allBias(r1.dcp.biasFullVec);
@@ -2008,6 +2197,8 @@ void cycleAnalysis(std::string file1, std::string file2, std::string file3,
 			mgC->Add(grC, "PL");
 			legA->AddEntry(grA, bias.c_str(), "lp");
 			legC->AddEntry(grC, bias.c_str(), "lp");
+
+			delete grA; delete grC;
 		}
 		mgA->GetXaxis()->SetTitle("PMT Signal [mV ns]");
 		mgA->GetYaxis()->SetTitle("Further signal / Centre signal");
@@ -2031,14 +2222,111 @@ void cycleAnalysis(std::string file1, std::string file2, std::string file3,
 	delete Ctmp;
 }
 
-// void tempAnalysis(std::string inputFolder,
-// 				  std::string filenamePattern,
-// 				  std::string outputFolder)
-// {
-// 	const Double_t highLed = std::stod(g_highestLed);
+void tempAnalysis(std::string outputDir, std::string envDataFile,
+		std::vector<std::string> dataFiles)
+{
+	std::vector<environmentSample> envData = readEnvData(envDataFile);
 
-// 	environmentSample temp;
-// }
+	std::vector<fileResults> resVec;
+
+	for (std::string data : dataFiles)
+	{
+		fileResults fr = genericAnalysis(data, outputDir, false);
+		std::cout << "gen analysis" << std::endl;
+		resVec.push_back(fr);
+		std::cout << "for loop gen analysis fin" << std::endl;
+	}
+
+	std::cout << "finished generic analysis" << std::endl;
+
+	std::vector<std::string> allBias(resVec.at(0).dcp.biasFullVec);
+	std::cout << "create allbias"<<std::endl;
+	allBias.insert(allBias.end(), resVec.at(0).dcp.biasShortVec.begin(), resVec.at(0).dcp.biasShortVec.end());
+	std::cout << "create insert"<<std::endl;
+
+	auto biasPtr = std::find(allBias.begin(), allBias.end(), "81");
+	const int biasIndex = std::distance(allBias.begin(), biasPtr);
+	std::vector<std::string> labels = biasIndex < (int) resVec.at(0).dcp.biasFullVec.size() ?
+			resVec.at(0).dcp.ledShortVec : resVec.at(0).dcp.ledFullVec;
+
+	while (outputDir.back() == '/')
+	{
+		outputDir.pop_back();
+	}
+	std::cout << "popped back" << std::endl;
+
+	std::string pmtTitle = "PMT Temperature Response";
+	std::string pmtAxis = "PMT Signal [mV ns]";
+	std::string tempAxis = "Temperature [\u2103C]";
+	std::string mppcAxis = "MPPC Signal [mV ns]";
+
+	std::string pdfFile = outputDir + "/1-2-3_Temperature.pdf";
+
+	std::vector<std::vector<double>> pmtArrTransposed;
+	std::vector<std::vector<double>> tempArrTransposed;
+	for (int j = 0 ; j < (int) resVec.size() ; j++)
+	{
+		fileResults res = resVec.at(j);
+		std::vector<highPeResult> fPmt = res.gaussFits.at(3).at(biasIndex);
+		std::vector<int32_t> fTimestamps = res.timestamps.at(biasIndex);
+		std::vector<double> biasPmt;
+		std::vector<double> biasTemp;
+
+		for (int k = 0 ; k < (int) fPmt.size() ; k++)
+		{
+			biasPmt.push_back(fPmt.at(k).mean * -1);
+			environmentSample env = getSampleInterp(envData, fTimestamps.at(k));
+			biasTemp.push_back(env.temperature);
+		}
+		pmtArrTransposed.push_back(biasPmt);
+		tempArrTransposed.push_back(biasTemp);
+	}
+	std::vector<std::vector<double>> pmtArr = transpose2DVector(pmtArrTransposed);
+	std::vector<std::vector<double>> tempArr = transpose2DVector(tempArrTransposed);
+
+	TCanvas* Ctmp = new TCanvas();
+	std::cout << "created ctmp" << std::endl;
+	Ctmp->SaveAs((pdfFile + "[").c_str());
+
+	saveMultiGraph(pdfFile, pmtTitle, tempArr, pmtArr, tempAxis, pmtAxis, labels);
+
+	for (int i = 0 ; i < 3 ; i++)
+	{
+		std::cout << "Start channel loop " << i<<std::endl;
+		std::string mppcN = resVec.at(0).mppcNumbers.at(i);
+		std::cout << "mppcN"<<std::endl;
+
+		std::string title = "MPPC " + mppcN + " Temperature Dependence";
+
+		std::cout << "Start file loop " << i<<std::endl;
+
+		std::vector<std::vector<double>> mppcArrTransposed;
+
+		for (int j = 0 ; j < (int) resVec.size() ; j++)
+		{
+			fileResults res = resVec.at(j);
+
+			std::cout << "got sample" << std::endl;
+			std::vector<highPeResult> fGauss = res.gaussFits.at(i).at(biasIndex);
+			std::vector<individualPeResult> fPoiss = res.poissFits.at(i).at(biasIndex);
+
+			std::string bias = allBias.at(biasIndex);
+			std::vector<double> mppc;
+			
+			for (int k = 0 ; k < (int) fGauss.size() ; k++)
+			{
+				mppc.push_back(fGauss.at(k).mean * -1);
+			}
+			mppcArrTransposed.push_back(mppc);
+		}
+		std::vector<std::vector<double>> mppcArr = transpose2DVector(mppcArrTransposed);
+		saveMultiGraph(pdfFile, title, tempArr, mppcArr, tempAxis, mppcAxis, labels);
+	}
+
+	Ctmp->SaveAs((pdfFile + "]").c_str());
+	delete Ctmp;
+	return;
+}
 
 
 // XXX: Probably don't want to do this but it is good to keep in mind
@@ -2064,6 +2352,7 @@ void cycleAnalysis(std::string file1, std::string file2, std::string file3,
 
 int main(int argc, char **argv)
 {
+	ROOT::EnableImplicitMT(4);
 	col->SetRGB(0.5,0.5,0.5);
 	if (argc < 2)
 	{
@@ -2107,7 +2396,7 @@ int main(int argc, char **argv)
 	}
 	else if (analysisType == "cycle-analyse")
 	{
-		if (argc < 3)
+		if (argc != 6)
 		{
 			std::cerr << "ERROR: you should have 5 parameters, please look in 'launch_analysis.sh'..." << std::endl;
 			return 1;
@@ -2117,6 +2406,18 @@ int main(int argc, char **argv)
 		std::string inputFile2(argv[4]);
 		std::string inputFile3(argv[5]);
 		cycleAnalysis(inputFile1, inputFile2, inputFile3, outputDir);
+	}
+	else if (analysisType == "temperature-analyse")
+	{
+		if (argc < 5)
+		{
+			std::cerr << "ERROR: you should have at leas 4 parameters, please look in 'launch_analysis.sh'..." << std::endl;
+			return 1;
+		}
+		std::string outputDir(argv[2]);
+		std::string envDataFile(argv[3]);
+		std::vector<std::string> dataFiles(argv + 4, argv + argc);
+		tempAnalysis(outputDir, envDataFile, dataFiles);
 	}
 	return 0;
 }

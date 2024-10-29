@@ -71,6 +71,14 @@ struct environmentSample // Temperature, pressure and humiditu sample
 	double temperature;
 	double humidity;
 	double pressure;
+	bool operator<(const environmentSample &s) const 
+	{
+        return timestamp < s.timestamp;
+    }
+	bool operator>(const environmentSample &s) const 
+	{
+        return timestamp > s.timestamp;
+    }
 };
 
 struct points
@@ -134,6 +142,7 @@ struct pmtResult
 	double amplitude;  double uAmplitude;
 	double mean;       double uMean;
 	double sigma;      double uSigma;
+	double chi2;
 	// placeholder for the moment
 };
 
@@ -145,7 +154,7 @@ struct individualPeResult
 	double pePeakSigma;    	      double uPePeakSigma;
 	double pePeakSeparation;      double uPePeakSeparation;
 	double pePeakSeparationSigma; double uPePeakSeparationSigma;
-	int nPeaks;
+	int nPeaks; double chi2;
 };
 
 struct highPeResult
@@ -153,6 +162,7 @@ struct highPeResult
 	double amplitude;  double uAmplitude;
 	double mean;       double uMean;
 	double sigma;      double uSigma;
+	double chi2;
 };
 
 struct darkResult
@@ -160,6 +170,7 @@ struct darkResult
 	double amplitude;  double uAmplitude;
 	double mean;       double uMean;
 	double sigma;      double uSigma;
+	double chi2;
 	// placeholder for the moment
 };
 
@@ -167,6 +178,7 @@ struct fileResults
 {
 	std::vector<std::string> mppcNumbers;
 	dataCollectionParameters dcp;
+	std::vector<std::vector<int32_t>> timestamps;
 	std::vector<std::vector<std::vector<highPeResult>>> gaussFits;
 	std::vector<std::vector<std::vector<individualPeResult>>> poissFits;
 	std::vector<std::vector<std::vector<darkResult>>> darkFits;
