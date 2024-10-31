@@ -101,21 +101,8 @@ struct gaussParams
 	double sigma;
 };
 
-struct plot2D
+struct dataHeader
 {
-	TH2D *histo;
-	std::string name;
-};
-
-struct plot1D
-{
-	TH1D *histo;
-	std::string name;
-};
-
-class dataHeader
-{
-public:
 	uint8_t timebase;
 	std::string activeChannels;
 	uint8_t numActive;
@@ -240,18 +227,18 @@ const std::vector<std::string> LEDV{"Dark", "805mV", "810mV", "820mV", "840mV", 
 const std::vector<std::string> PMTV{"1.2kV" /*, "1.25kV", "1.3kV", "1.35kV", "1.4kV", "1.45kV", "1.5kV"*/};
 // XXX: end
 
-const std::vector<std::string> biasFullVec{"78", "78.5", "79", "79.5", "80", "82", "82.5", "83"};
-const std::vector<std::string> ledFullVec{"820", "840", "850", "880", "890", "900"};
-const std::vector<std::string> biasShortVec{"80.5", "81", "81.5"};
-const std::vector<std::string> ledShortVec{"840", "880", "900"};
+// const std::vector<std::string> biasFullVec{"78", "78.5", "79", "79.5", "80", "82", "82.5", "83"};
+// const std::vector<std::string> ledFullVec{"820", "840", "850", "880", "890", "900"};
+// const std::vector<std::string> biasShortVec{"80.5", "81", "81.5"};
+// const std::vector<std::string> ledShortVec{"840", "880", "900"};
 const std::string g_pmt("1.4kV");
 const std::vector<std::string> picoscopeNames{"IW098-0028", "IW114-0004"};
 
 // TEMP
-// const std::vector<std::string> biasFullVec{"78", "78.5", "79", "79.5", "80", "80.5", "81", "81.5", "82", "82.5", "83"};
-// const std::vector<std::string> ledFullVec{};
-// const std::vector<std::string> biasShortVec{};
-// const std::vector<std::string> ledShortVec{"805", "810", "820", "840", "870", "890"};
+const std::vector<std::string> biasFullVec{"78", "78.5", "79", "79.5", "80", "80.5", "81", "81.5", "82", "82.5", "83"};
+const std::vector<std::string> ledFullVec{};
+const std::vector<std::string> biasShortVec{};
+const std::vector<std::string> ledShortVec{"805", "810", "820", "840", "870", "890"};
 // TEMP
 
 const dataCollectionParameters g_dcp{biasFullVec, ledFullVec, biasShortVec, ledShortVec};
