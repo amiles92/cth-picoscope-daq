@@ -23,6 +23,45 @@ def initPicoScopes(picoList, fnGen):
         print("Python - Device not opened")
         exit()
 
+def runBigSweep(bias, mppcStr, date, pmt, d, extra):
+    """
+    Runs extra big DAQ with fine sweeping of 5mV increments
+    Values are calibrated for around 21-23C operation, behaviour outside
+    this range is not known yet
+    """
+    s = r'%s'
+    outFilePattern = d + r"%s_%sV_%s_%skV_%s%s" % \
+                        (date, str(bias), s, pmt, mppcStr, extra)
+    
+    runDark(outFilePattern)
+
+    # XXX: Yeah i hate this, i should have just implemented some global cutoffs 
+    # and run them like that, rather than this monstrosity
+    if bias < 82:
+        runMvList(2, outFilePattern, range(500, 521, 5), 0)
+        runMvList(2, outFilePattern, range(525, 541, 5), 1)
+        runMvList(2, outFilePattern, range(545, 561, 5), 2)
+        runMvList(2, outFilePattern, [565], 3)
+        runMvList(3, outFilePattern, range(570, 581, 5), 3)
+        runMvList(4, outFilePattern, range(585, 596, 5), 4)
+        runMvList(4, outFilePattern, [600], 5)
+        runMvList(5, outFilePattern, range(605, 621, 5), 5)
+        runMvList(5, outFilePattern, range(625, 631, 5), 6)
+        runMvList(6, outFilePattern, [635, 640], 6)
+        runMvList(6, outFilePattern, range(645, 676, 5), 7)
+        if bias in [80.5, 81, 81.5]:
+            runMvList(7, outFilePattern, range(675, 726, 5), 8)
+            runMvList(7, outFilePattern, range(730, 726, 5), 9)
+    else:
+        runMvList(2, outFilePattern, range(500, 521, 5), 0)
+        runMvList(2, outFilePattern, range(525, 541, 5), 1)
+        runMvList(2, outFilePattern, range(545, 561, 5), 2)
+        runMvList(3, outFilePattern, range(565, 576, 5), 3)
+        runMvList(4, outFilePattern, range(580, 591, 5), 4)
+        runMvList(5, outFilePattern, range(595, 621, 5), 5)
+        runMvList(6, outFilePattern, range(625, 646, 5), 6)
+        runMvList(7, outFilePattern, range(650, 676, 5), 7)
+
 def daqPerBias(bias, mppcStr, mv50List, mv200List, date, pmt, d, extra):
     """Runs DAQ for a range of LED Voltages for a given bias voltage"""
     s = r'%s'
@@ -184,8 +223,9 @@ def main(mppcList, reset, extra=''):
     try:
         for bias in biasVoltageList:
             vc.rampVoltage(vs, bias)
-            mvLists = ledVoltageMap[bias]
-            daqPerBias(bias, mppcStr, mvLists[0], mvLists[1], date, pmt, path, extra)
+            runBigSweep()
+            # mvLists = ledVoltageMap[bias]
+            # daqPerBias(bias, mppcStr, mvLists[0], mvLists[1], date, pmt, path, extra)
     except:
         vc.rampVoltage(vs, 0)
 
