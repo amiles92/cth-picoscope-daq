@@ -26,6 +26,7 @@
 #include "TColor.h"
 #include "TFile.h"
 #include "TGraph.h"
+#include "TGraphErrors.h"
 #include "TMultiGraph.h"
 #include "TLegend.h"
 #include "TH1.h"
@@ -48,6 +49,7 @@
 #include "TTreeReaderArray.h"
 #include "TVectorD.h"
 #include "TROOT.h"
+#include "TMath.h"
 #include "Math/MinimizerOptions.h"
 #include "TError.h"
 
@@ -135,10 +137,10 @@ struct wfNumbers // this being necessary brings me anger - Alex
 struct pmtResult
 {
 	double amplitude;  double uAmplitude;
-	double mean;       double uMean;
-	double sigma;      double uSigma;
+	double location;   double uLocation;
+	double scale;      double uScale;
+	double alpha;      double uSlpha;
 	double chi2;
-	// placeholder for the moment
 };
 
 struct individualPeResult
@@ -227,18 +229,18 @@ const std::vector<std::string> LEDV{"Dark", "805mV", "810mV", "820mV", "840mV", 
 const std::vector<std::string> PMTV{"1.2kV" /*, "1.25kV", "1.3kV", "1.35kV", "1.4kV", "1.45kV", "1.5kV"*/};
 // XXX: end
 
-// const std::vector<std::string> biasFullVec{"78", "78.5", "79", "79.5", "80", "82", "82.5", "83"};
-// const std::vector<std::string> ledFullVec{"820", "840", "850", "880", "890", "900"};
-// const std::vector<std::string> biasShortVec{"80.5", "81", "81.5"};
-// const std::vector<std::string> ledShortVec{"840", "880", "900"};
+const std::vector<std::string> biasFullVec{"78", "78.5", "79", "79.5", "80", "82", "82.5", "83"};
+const std::vector<std::string> ledFullVec{"820", "840", "850", "880", "890", "900"};
+const std::vector<std::string> biasShortVec{"80.5", "81", "81.5"};
+const std::vector<std::string> ledShortVec{"840", "880", "900"};
 const std::string g_pmt("1.4kV");
 const std::vector<std::string> picoscopeNames{"IW098-0028", "IW114-0004"};
 
 // TEMP
-const std::vector<std::string> biasFullVec{"78", "78.5", "79", "79.5", "80", "80.5", "81", "81.5", "82", "82.5", "83"};
-const std::vector<std::string> ledFullVec{};
-const std::vector<std::string> biasShortVec{};
-const std::vector<std::string> ledShortVec{"805", "810", "820", "840", "870", "890"};
+// const std::vector<std::string> biasFullVec{"78", "78.5", "79", "79.5", "80", "80.5", "81", "81.5", "82", "82.5", "83"};
+// const std::vector<std::string> ledFullVec{};
+// const std::vector<std::string> biasShortVec{};
+// const std::vector<std::string> ledShortVec{"805", "810", "820", "840", "870", "890"};
 // TEMP
 
 const dataCollectionParameters g_dcp{biasFullVec, ledFullVec, biasShortVec, ledShortVec};
@@ -251,6 +253,10 @@ const uint32_t g_baselineLowerWindow = 0;
 const uint32_t g_baselineUpperWindow = 100; // so fitting is a bit more reliable
 const uint32_t g_integratedLowerWindow = 160;
 const uint32_t g_integratedUpperWindow = 210;
+
+bool g_quickPreAnalysis = false;
+const uint32_t g_quickBaselineLowerWindow = 0;
+const uint32_t g_quickBaselineUpperWindow = 20;
 
 // const bool doMovingAverage(false);
 const bool plotFirstWaveforms(false); // TODO: Implement this??
@@ -282,6 +288,7 @@ const bool g_saveAllPlots = true; // save all produced hists to chonky pdf, reco
 const int g_highPeCutoff = 845; // LED values below are treated as individual PE,  above is high PE
 const int g_nBins = 500;
 
+const int g_threads = 2;
 TColor *col = gROOT->GetColor(10);
 
 const std::string g_tmpPdf = "/home/amiles/Documents/PhD/mppc-qc/plots/7-8-9_tmpbase.pdf";
