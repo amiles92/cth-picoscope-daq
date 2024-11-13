@@ -51,7 +51,6 @@ def runBigSweep(bias, mppcStr, date, pmt, d, extra):
         runMvList(6, outFilePattern, range(645, 676, 5), 7)
         if bias in [80.5, 81, 81.5]:
             runMvList(7, outFilePattern, range(675, 726, 5), 8)
-            runMvList(7, outFilePattern, range(730, 726, 5), 9)
     else:
         runMvList(2, outFilePattern, range(500, 521, 5), 0)
         runMvList(2, outFilePattern, range(525, 541, 5), 1)
@@ -112,7 +111,7 @@ def runMvList(vRange, oFilePatternRaw, mvList, pmtVRange=2):
 
     return
 
-def sanityCheck(bias, mppcStr, ledV, date, pmt, d, extra, picoscopes):
+def quickCheck(bias, mppcStr, ledV, date, pmt, d, extra, picoscopes):
     """
     Runs short DAQ with high LED and bias to check if the signals seem reasonable.
 
@@ -213,7 +212,7 @@ def main(mppcList, reset, extra=''):
 
     input("Ramp PMT then press enter to begin...")
 
-    res = sanityCheck(targetVoltage, mppcStr, 890, date, pmt, path, extra, picoscopes)
+    res = quickCheck(targetVoltage, mppcStr, 675, date, pmt, path, extra, picoscopes)
     if not res:
         vc.rampVoltage(vs, jumpTarget)
         vc.jumpVoltage(vs, 0)
@@ -223,7 +222,7 @@ def main(mppcList, reset, extra=''):
     try:
         for bias in biasVoltageList:
             vc.rampVoltage(vs, bias)
-            runBigSweep()
+            runBigSweep(bias, mppcStr, date, pmt, path, extra)
             # mvLists = ledVoltageMap[bias]
             # daqPerBias(bias, mppcStr, mvLists[0], mvLists[1], date, pmt, path, extra)
     except:

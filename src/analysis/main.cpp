@@ -1213,7 +1213,7 @@ void preAnalyseFolder(std::string directory, std::string date, std::string outpu
 	std::string filename;
 	if (g_quickPreAnalysis)
 	{
-		filename = outputFile + "_quick.root"
+		filename = outputFile + "_quick.root";
 	}
 	else
 	{
@@ -2008,9 +2008,9 @@ int main(int argc, char **argv)
 	}
 	else if (analysisType == "analyse")
 	{
-		if (argc != 3)
+		if (argc != 4)
 		{
-			std::cerr << "ERROR: you should have 3 parameters, please look in 'launch_analysis.sh'..." << std::endl;
+			std::cerr << "ERROR: you should have 4 parameters, please look in 'launch_analysis.sh'..." << std::endl;
 			return 1;
 		}
 		std::string outputDir(argv[2]);
