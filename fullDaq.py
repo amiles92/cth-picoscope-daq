@@ -144,7 +144,7 @@ def quickCheck(bias, mppcStr, ledV, date, pmt, d, extra, picoscopes):
         res = sc.sanityBool(out + "_%s.dat" % ps.replace("/","-"), output=True)
         if not res:
             print("\nERROR: Possible issues present in Picoscope %s" % ps)
-            sc.quickPlot(out + "_%s.dat" % ps.replace("/","-"))
+            sc.quickPlot(out + "_%s.dat")
             ex = True
     
     if ex:
@@ -161,7 +161,7 @@ def main(mppcList, reset, extra=''):
 
     date = datetime.today().strftime('%Y-%m-%d')
 
-    directory = r'/media/cdc/MPPC-QC/QC-data/test_2024sep'
+    directory = r'/media/cdc/MPPC-QC/QC-data/test_2024Nov'
     mppcStr = "-".join(mppcList)
     if extra != '':
         extra = '_' + extra
