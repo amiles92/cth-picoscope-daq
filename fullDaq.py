@@ -11,6 +11,25 @@ import daq6000a as daq
 g_quickPlots = True
 ####################
 
+def endNotification():
+    if not music: return
+    try:
+        from pygame import mixer
+        import glob
+        import random
+
+        options = glob.glob("./msc/*.mp3")
+        choice = random.choice(options)
+
+        mixer.init()
+        mixer.music.load(choice)
+        mixer.music.play()
+        input("Press ENTER to stop the music")
+        mixer.music.stop()
+    except:
+        return
+    return
+
 def initPicoScopes(picoList, fnGen):
     for ps in picoList:
         status = daq.multiSeriesInitDaq(ps)
@@ -35,33 +54,13 @@ def runBigSweep(bias, mppcStr, date, pmt, d, extra):
     
     runDark(outFilePattern)
 
-    # XXX: Yeah i hate this, i should have just implemented some global cutoffs 
-    # and run them like that, rather than this monstrosity
-    if bias < 82:
-        runMvList(2, outFilePattern, range(500, 521, 5), 0)
-        runMvList(2, outFilePattern, range(525, 541, 5), 1)
-        runMvList(2, outFilePattern, range(545, 561, 5), 2)
-        runMvList(2, outFilePattern, [565], 3)
-        runMvList(3, outFilePattern, range(570, 581, 5), 3)
-        runMvList(4, outFilePattern, range(585, 596, 5), 4)
-        runMvList(4, outFilePattern, [600], 5)
-        runMvList(5, outFilePattern, range(605, 621, 5), 5)
-        runMvList(5, outFilePattern, range(625, 631, 5), 6)
-        runMvList(6, outFilePattern, [635, 640], 6)
-        runMvList(6, outFilePattern, range(645, 676, 5), 7)
-        if bias in [80.5, 81, 81.5]:
-            runMvList(7, outFilePattern, range(675, 726, 5), 8)
-    else:
-        runMvList(2, outFilePattern, range(500, 521, 5), 0)
-        runMvList(2, outFilePattern, range(525, 541, 5), 1)
-        runMvList(2, outFilePattern, range(545, 561, 5), 2)
-        runMvList(3, outFilePattern, range(565, 576, 5), 3)
-        runMvList(4, outFilePattern, range(580, 591, 5), 4)
-        runMvList(5, outFilePattern, range(595, 621, 5), 5)
-        runMvList(6, outFilePattern, range(625, 646, 5), 6)
-        runMvList(7, outFilePattern, range(650, 676, 5), 7)
+    runMvList(2, outFilePattern, range(545, 561, 5), 2)
+    runMvList(3, outFilePattern, range(565, 576, 5), 3)
+    runMvList(4, outFilePattern, range(580, 591, 5), 4)
+    runMvList(5, outFilePattern, range(595, 621, 5), 5)
+    runMvList(6, outFilePattern, range(625, 646, 5), 6)
 
-def daqPerBias(bias, mppcStr, mv50List, mv200List, date, pmt, d, extra):
+def daqPerBias(bias, mppcStr, mvLists, date, pmt, d, extra):
     """Runs DAQ for a range of LED Voltages for a given bias voltage"""
     s = r'%s'
     outFilePattern = d + r"%s_%sV_%s_%skV_%s%s" % \
@@ -69,9 +68,14 @@ def daqPerBias(bias, mppcStr, mv50List, mv200List, date, pmt, d, extra):
     
     runDark(outFilePattern)
 
-    runMvList(2, outFilePattern, mv50List, 1) # 20 mV PMT range for low light
+    if len(mvLists) > 0:
+        runMvList(2, outFilePattern, mvLists[0], 2) # 20 mV PMT range for low light
 
-    runMvList(4, outFilePattern, mv200List)
+    if len(mvLists) > 1:
+        runMvList(4, outFilePattern, mvLists[1], 4)
+    
+    if len(mvLists) > 2:
+        runMvList(6, outFilePattern, mvLists[2], 6)
 
     return
 
@@ -173,18 +177,22 @@ def main(mppcList, reset, extra=''):
 
     biasVoltageList = [83, 82.5, 82, 81.5, 81, 80.5, 80, 79.5, 79, 78.5, 78]
 
+    mv50List = [525, 540, 545]
+    mv200List = [565, 575, 585]
+    mv1kList = [600, 610, 620, 630]
+
     # bias voltage is key, first list if 50mV range, second list is 200mV
-    ledVoltageMap = {83  : [[840],[880, 900]],
-                     82.5: [[840],[880, 900]],
-                     82  : [[840],[880, 900]],
-                     81.5: [[820, 840, 850],[880, 890, 900]],
-                     81  : [[820, 840, 850],[880, 890, 900]],
-                     80.5: [[820, 840, 850],[880, 890, 900]],
-                     80  : [[840],[880, 900]],
-                     79.5: [[840],[880, 900]],
-                     79  : [[840],[880, 900]],
-                     78.5: [[840],[880, 900]],
-                     78  : [[840],[880, 900]],
+    ledVoltageMap = {83  : [mv50List, mv200List, mv1kList], # [[840],[880, 900]],
+                     82.5: [mv50List, mv200List, mv1kList], # [[840],[880, 900]],
+                     82  : [mv50List, mv200List, mv1kList], # [[840],[880, 900]],
+                     81.5: [mv50List, mv200List, mv1kList], # [[820, 840, 850],[880, 890, 900]],
+                     81  : [mv50List, mv200List, mv1kList], # [[820, 840, 850],[880, 890, 900]],
+                     80.5: [mv50List, mv200List, mv1kList], # [[820, 840, 850],[880, 890, 900]],
+                     80  : [mv50List, mv200List, mv1kList], # [[840],[880, 900]],
+                     79.5: [mv50List, mv200List, mv1kList], # [[840],[880, 900]],
+                     79  : [mv50List, mv200List, mv1kList], # [[840],[880, 900]],
+                     78.5: [mv50List, mv200List, mv1kList], # [[840],[880, 900]],
+                     78  : [mv50List, mv200List, mv1kList], # [[840],[880, 900]],
     }
 
     targetVoltage   = biasVoltageList[0]
@@ -222,9 +230,9 @@ def main(mppcList, reset, extra=''):
     try:
         for bias in biasVoltageList:
             vc.rampVoltage(vs, bias)
-            runBigSweep(bias, mppcStr, date, pmt, path, extra)
-            # mvLists = ledVoltageMap[bias]
-            # daqPerBias(bias, mppcStr, mvLists[0], mvLists[1], date, pmt, path, extra)
+            # runBigSweep(bias, mppcStr, date, pmt, path, extra)
+            mvLists = ledVoltageMap[bias]
+            daqPerBias(bias, mppcStr, mvLists, date, pmt, path, extra)
     except:
         vc.rampVoltage(vs, 0)
 
@@ -251,6 +259,7 @@ def main(mppcList, reset, extra=''):
         exit()
     
     print("Total elapsed time:", int(time.time() - start), "s")
+    endNotification()
 
 if __name__ == '__main__':
     args = sys.argv
@@ -259,6 +268,11 @@ if __name__ == '__main__':
     if "--crashed" in args:
         reset = False
         args.remove("--crashed")
+    
+    music = True
+    if "--silent" in args:
+        music = False
+        args.remove("--silent")
 
     if len(args) < 4 | len(args) > 5:
         print("python3 fullDaq.py n1 n2 n3 [label] [--crashed]")

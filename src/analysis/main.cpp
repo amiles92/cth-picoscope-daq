@@ -720,15 +720,15 @@ std::vector<int> findLocalMaxima(std::vector<double> &data, double height)
 	int i;
 	for (i = 1 ; i < (int) data.size() - 1; i++)
 	{
-		std::cout << "i: " << i;
-		if (data.at(i) > data.at(i - 1)) continue;
-		std::cout << " - 1" << std::endl;
-		if (data.at(i) > data.at(i + 1)) continue;
-		std::cout << " - 2" << std::endl;
-		if (data.at(i) >= height) continue;
-		std::cout << " - 3" << std::endl;
-		// if (data.at(i) > data.at(i - 1) && data.at(i) > data.at(i + 1)
-		// 		&& data.at(i) >= height) 
+		// std::cout << "i: " << i;
+		// if (data.at(i) > data.at(i - 1)) continue;
+		// std::cout << " - 1" << std::endl;
+		// if (data.at(i) > data.at(i + 1)) continue;
+		// std::cout << " - 2" << std::endl;
+		// if (data.at(i) >= height) continue;
+		// std::cout << " - 3" << std::endl;
+		if (data.at(i) > data.at(i - 1) && data.at(i) > data.at(i + 1)
+				&& data.at(i) >= height) 
 		maxima.push_back(i + 1);
 	}
 
@@ -790,14 +790,10 @@ std::vector<int> findProminentMaxima(std::vector<double> &data,
 
 std::vector<int> findPeaks(TH1D* hist)
 {
-	std::cout << "making data vector" << std::endl;
 	std::vector<double> data(hist->GetNbinsX());
 	for (int i = 0 ; i < hist->GetNbinsX() ; i++) data.push_back(hist->GetBinContent(i));
-	std::cout << "finding local maxima" << std::endl;
 	std::vector<int> peaks = findLocalMaxima(data, 80);
-	std::cout << "finding separate maxima" << std::endl;
 	peaks = findSeparateMaxima(data, peaks, 30); // XXX: currently separated by bins, but maybe should change to real values?
-	std::cout << "finding prominent maxima" << std::endl;
 	peaks = findProminentMaxima(data, peaks, 50);
 	return peaks;
 }
@@ -806,6 +802,8 @@ std::vector<double> initialGuesses(TH1D* hist)
 {
 	std::vector<int> peaks = findPeaks(hist);
 	double binWidth = hist->GetXaxis()->GetBinWidth(0);
+
+	if (peaks.size() < 2) return {};
 
 	double meanDiff = (std::reduce(peaks.begin() + 1, peaks.end()) 
 			- std::reduce(peaks.begin(), peaks.end() - 1)) / (peaks.size() - 1);
@@ -837,11 +835,8 @@ individualPeResult individualPeAnalysis(const double* data, const int nWfs,
 		hist->Fill(data[i]);
 	}
 
-	std::cout << "finding peaks" << std::endl;
 	std::vector<int> peaks = findPeaks(hist);
-	std::cout << "grabbing guesses" << std::endl;
 	std::vector<double> guesses = initialGuesses(hist);
-	std::cout << "done guesses" << std::endl;
 
 	hist->Sumw2();
 
@@ -853,13 +848,21 @@ individualPeResult individualPeAnalysis(const double* data, const int nWfs,
 
 	for (int i = 2 ; i < 10 ; i++)
 	{
+		if (guesses.size() == 0)
+		{
+			fn->SetParameter(1, 3);
+			fn->SetParameter(4, -50);
+		}
+		else
+		{
+			fn->SetParameter(1, guesses.at(1));
+			fn->SetParameter(4, guesses.at(0));
+		}
 		fn->SetParameter(0, nWfs);
-		fn->SetParameter(1, 3);
 		fn->SetParameter(2, 0);
 		fn->SetParLimits(2, -20, 15);
 		fn->SetParameter(3, 1);
 		fn->SetParLimits(3, 0.1, 25);
-		fn->SetParameter(4, -50);
 		fn->SetParameter(5, 0.5);
 		fn->SetParLimits(5, 0.1, 8);
 		fn->FixParameter(6, i);
@@ -1784,9 +1787,9 @@ fileResults genericAnalysis(std::string filePath, std::string outputDir, bool fi
 	gStyle->SetOptStat(0);
 	gStyle->SetOptFit(1111);
 
-	// gaussFits = gaussFitting(dcp, forest, *picoscopeNames);
-	// std::cout << std::endl;
-	// std::cout << "###### Finished Gaussian Fitting" << std::endl;
+	gaussFits = gaussFitting(dcp, forest, *picoscopeNames);
+	std::cout << std::endl;
+	std::cout << "###### Finished Gaussian Fitting" << std::endl;
 
 	poissFits = poissFitting(dcp, forest, *picoscopeNames);
 	std::cout << std::endl;
