@@ -55,6 +55,14 @@ std::vector<std::vector<T>> transpose2DVector(std::vector<std::vector<T>> arr)
 	return outArr;
 }
 
+template <typename T>
+int getIndex(std::vector<T> arr, T obj)
+{
+	auto objPtr = std::find(arr.begin(), arr.end(), obj);
+	const int objIndex = std::distance(arr.begin(), objPtr);
+	return objIndex;
+}
+
 void progressBar(int current, int total, std::string label)
 {
 	const int barSize = 20;
@@ -163,7 +171,7 @@ std::string bytesString(std::ifstream &f,
 
 float adc2mv(const int16_t value, const int range)
 {
-	return (value / 32512.0f) * ps6000VRanges[range];
+	return (value / 32512.0f) * VRanges[range];
 }
 
 dataHeader readHeader(std::ifstream &f)
@@ -542,7 +550,7 @@ double chargeIntegrationFixed(const std::vector<sample> &data,
 	double integratedChargeRaw(0);
 	int lowerEdge(std::max((uint32_t) 0,lowerWindow));
 	int upperEdge(std::min((uint32_t) data.size() - 1,upperWindow));
-	double totalBaseline(baseline * (upperEdge - lowerEdge));
+	double totalBaseline(baseline * (upperEdge - lowerEdge + 1));
 
 	for (int i0(lowerEdge) ; i0 <= upperEdge ; ++i0)
 	{
@@ -703,28 +711,137 @@ double pgdPtr(double *x, double *p) // pointer version of the Poiss-Gauss distri
 	return poissGaussDistribution(x[0], p[0], p[1], p[2], p[3], p[4], p[5], p[6], p[7], p[8]);
 }
 
+std::vector<int> findLocalMaxima(std::vector<double> &data, double height)
+{
+	std::vector<int> maxima;
+
+	if (data.at(0) > data.at(1) && data.at(0) >= height) maxima.push_back(0);
+
+	int i;
+	for (i = 1 ; i < (int) data.size() - 1; i++)
+	{
+		std::cout << "i: " << i;
+		if (data.at(i) > data.at(i - 1)) continue;
+		std::cout << " - 1" << std::endl;
+		if (data.at(i) > data.at(i + 1)) continue;
+		std::cout << " - 2" << std::endl;
+		if (data.at(i) >= height) continue;
+		std::cout << " - 3" << std::endl;
+		// if (data.at(i) > data.at(i - 1) && data.at(i) > data.at(i + 1)
+		// 		&& data.at(i) >= height) 
+		maxima.push_back(i + 1);
+	}
+
+	if (data.at(i) > data.at(i - 1) && data.at(i) >= height) maxima.push_back(i);
+
+	return maxima;
+}
+
+std::vector<int> findSeparateMaxima(std::vector<double> &data, 
+		std::vector<int> &maxima, int separation)
+{
+	std::vector<bool> keepVec(maxima.size());
+	std::vector<int> sortedIndices(maxima.size());
+	std::iota(sortedIndices.begin(), sortedIndices.end(), 0);
+	std::sort(sortedIndices.begin(), sortedIndices.end(), 
+			[&](int a, int b) {return data.at(a) < data.at(b);});
+
+	for (int ind : sortedIndices)
+	{
+		int keep = true;
+		for (int i = 0 ; i < ind ; i++)
+		{
+			if (std::abs(maxima.at(i) - maxima.at(ind)) < separation) keep = false;
+		}
+		keepVec.at(ind) = keep;
+	} 
+
+	std::vector<int> out;
+	for (int i = 0 ; i < (int) keepVec.size() ; i++) 
+	{
+		if (keepVec.at(i)) out.push_back(maxima.at(i));
+	}
+	return out;
+}
+
+std::vector<int> findProminentMaxima(std::vector<double> &data, 
+		std::vector<int> &maxima, double prominence)
+{
+	if (maxima.size() == 1) return maxima;
+
+	std::vector<double> minVector(maxima.size() + 1);
+
+	minVector.at(0) = DBL_MIN;
+	for (int i = 1 ; i < (int) maxima.size() ; i++)
+	{
+		minVector.at(i) = (*std::min_element(data.begin() + maxima.at(i - 1), data.begin() + maxima.at(i)));
+	}
+	minVector.at(maxima.size()) = DBL_MIN;
+
+	std::vector<int> out;
+
+	for (int i = 0 ; i < (int) maxima.size() ; i++)
+	{
+		if (minVector.at(i) < prominence && minVector.at(i + 1) < prominence) out.push_back(maxima.at(i));
+	}
+
+	return out;
+}
+
+std::vector<int> findPeaks(TH1D* hist)
+{
+	std::cout << "making data vector" << std::endl;
+	std::vector<double> data(hist->GetNbinsX());
+	for (int i = 0 ; i < hist->GetNbinsX() ; i++) data.push_back(hist->GetBinContent(i));
+	std::cout << "finding local maxima" << std::endl;
+	std::vector<int> peaks = findLocalMaxima(data, 80);
+	std::cout << "finding separate maxima" << std::endl;
+	peaks = findSeparateMaxima(data, peaks, 30); // XXX: currently separated by bins, but maybe should change to real values?
+	std::cout << "finding prominent maxima" << std::endl;
+	peaks = findProminentMaxima(data, peaks, 50);
+	return peaks;
+}
+
 std::vector<double> initialGuesses(TH1D* hist)
 {
-	std::vector<double> outVec(0, 4); // 0th peak, 1st peak, sigma?
+	std::vector<int> peaks = findPeaks(hist);
+	double binWidth = hist->GetXaxis()->GetBinWidth(0);
+
+	double meanDiff = (std::reduce(peaks.begin() + 1, peaks.end()) 
+			- std::reduce(peaks.begin(), peaks.end() - 1)) / (peaks.size() - 1);
+	double separation = meanDiff * binWidth * -1; // need it negative for our current implementation
+
+	int index = *std::max_element(peaks.begin(), peaks.end(), [&](int a, int b) 
+			{return hist->GetBinContent(a) < hist->GetBinContent(b);});
+	double lambdaGuess = hist->GetBinCenter(index) / separation;
+
+	std::vector<double> outVec = {separation, lambdaGuess};
+
 	return outVec;
 }
 
 individualPeResult individualPeAnalysis(const double* data, const int nWfs,
-		const double xmin, const double xmax, const int nbins)
+		const double xmin, const double xmax, const int nbins, std::string title = "")
 {
 	TCanvas *c = new TCanvas();
-	TH1D* hist = new TH1D("hist", "Individual Photoelectron Signal", nbins, xmin, xmax);
+	TH1D* hist = new TH1D("hist", (title + "Individual PE Signal").c_str(), nbins, xmin, xmax);
 
 	TF1* fn = new TF1("poissGaus", pgdPtr, xmin, xmax, 9);
-	// fn->SetParNames("Amplitude", "\\lambda", "\\mu_{0}", "\\sigma_{PE}", "\\mu",
-	// 		"\\sigma", "n", "Amplitude_{0}", "\\sigma_{0}");
-	fn->SetParNames("Amplitude_Signal", "\\lambda", "Mean_Noise", "\\sigma_Signal", 
-			"Peak Separation", "\\sigma_nth Peak", "n", "Amplitude_Noise", "\\sigma_Noise");
+	fn->SetParNames("Amplitude", "\\lambda", "\\mu_{0}", "\\sigma_{PE}", "\\mu",
+			"\\sigma", "n", "Amplitude_{0}", "\\sigma_{0}");
+	// fn->SetParNames("Amplitude_Signal", "\\lambda", "Mean_Noise", "\\sigma_Signal", 
+	// 		"Peak Separation", "\\sigma_nth Peak", "n", "Amplitude_Noise", "\\sigma_Noise");
 
 	for (int i = 0 ; i < nWfs ; i++)
 	{
 		hist->Fill(data[i]);
 	}
+
+	std::cout << "finding peaks" << std::endl;
+	std::vector<int> peaks = findPeaks(hist);
+	std::cout << "grabbing guesses" << std::endl;
+	std::vector<double> guesses = initialGuesses(hist);
+	std::cout << "done guesses" << std::endl;
 
 	hist->Sumw2();
 
@@ -775,6 +892,23 @@ individualPeResult individualPeAnalysis(const double* data, const int nWfs,
 	bestHist->GetXaxis()->SetTitle("Integrated charge [mV ns]");
 	bestHist->GetYaxis()->SetTitle("Counts");
 	bestHist->Draw();
+
+	int j = 0;
+	for (int i = 0 ; i < hist->GetNbinsX() ; i++)
+	{
+		if (i == peaks.at(j))
+		{
+			j++;
+			if (j == (int) peaks.size()) j = 0;
+		}
+		else
+		{
+			bestHist->SetBinContent(i, 0);
+		}
+	}
+
+	bestHist->Draw("same func p");
+
 	c->SaveAs("/home/amiles/Documents/PhD/mppc-qc/plots/tmpPoiss.pdf");
 
 	delete hist;
@@ -786,10 +920,11 @@ individualPeResult individualPeAnalysis(const double* data, const int nWfs,
 }
 
 highPeResult highPeAnalysis(const double* data, const int nWfs,
-		const double xmin, const double xmax, const int nbins)
+		const double xmin, const double xmax, const int nbins,
+		std::string title = "")
 {
 	TCanvas *c = new TCanvas();
-	TH1D* hist = new TH1D("hist", "High Photoelectron Signal", nbins, xmin, xmax);
+	TH1D* hist = new TH1D("hist", (title + "High PE Signal").c_str(), nbins, xmin, xmax);
 
 	for (int i = 0 ; i < nWfs ; i++)
 	{
@@ -922,18 +1057,81 @@ environmentSample getSampleInterp(std::vector<environmentSample> envData, int32_
 ///                            Saving functions                             ///
 ///////////////////////////////////////////////////////////////////////////////
 
+TFitResultPtr saveGraph(std::string outputFile, std::string title, 
+		std::vector<double> &x, std::vector<double> &y,
+		std::string xLabel, std::string yLabel,
+		std::vector<double> &uX, std::vector<double> &uY, bool linFit)
+{
+	std::cout << "### Creating multi-graph: " << title << std::endl;
+	if (x.size() != y.size()
+	|| (y.size() != uX.size() && uX.size() > 0)
+	|| (y.size() != uY.size() && uY.size() > 0))
+	{
+		std::cout << "ERROR: Number of multi-graph entries inconsistent!" << std::endl;
+		std::cout << "Size of 1st dimension of x array: " << x.size() << std::endl;
+		if (uX.size())
+		{
+			std::cout << "Size of 1st dimension of x error array: " << uX.size() << std::endl;
+		}
+		std::cout << "Size of 1st dimension of y array: " << y.size() << std::endl;
+		if (uY.size())
+		{
+			std::cout << "Size of 1st dimension of y error array: " << uY.size() << std::endl;
+		}
+		exit(1);
+	}
+
+	TCanvas *c = new TCanvas("gr1D", title.c_str());
+	c->cd();
+
+	double* uXPtr = uX.size() ? uX.data() : NULL;
+	double* uYPtr = uY.size() ? uY.data() : NULL;
+
+	TGraphErrors *gr = new TGraphErrors(x.size(), x.data(), y.data(), uXPtr, uYPtr);
+	gr->SetLineColor(1);
+	gr->SetMarkerColor(1);
+	gr->SetMarkerSize(0.75);
+	gr->SetMarkerStyle(8);
+	gr->SetFillColor(1);
+	gr->GetXaxis()->SetTitle(xLabel.c_str());
+	gr->GetYaxis()->SetTitle(yLabel.c_str());
+	gr->SetTitle(title.c_str());
+
+	gStyle->SetOptFit(11);
+
+	TFitResultPtr res;
+
+	if (linFit) res = gr->Fit("pol1", "QS");
+
+	gr->Draw("AP");
+	c->Modified();
+	c->Update();
+	c->SaveAs(outputFile.c_str());
+	delete gr; delete c;
+	return res;
+}
+
+TFitResultPtr saveGraph(std::string outputFile, std::string title, 
+		std::vector<double> &x, std::vector<double> &y,
+		std::string xLabel, std::string yLabel, bool linFit)
+{
+	std::vector<double> uX;
+	std::vector<double> uY;
+	return saveGraph(outputFile, title, x, y, xLabel, yLabel, uX, uY, linFit);
+}
+
 void saveMultiGraph(std::string outputFile, std::string title,
 		std::vector<std::vector<double>> &xArr, std::vector<std::vector<double>> &yArr,
 		std::string xLabel, std::string yLabel, std::vector<std::string> &labels,
 		std::vector<std::vector<double>> &uXArr, std::vector<std::vector<double>> &uYArr,
-		TLegend *leg = NULL)
+		TCanvas *c = NULL, TLegend *leg = NULL)
 {
 	std::cout << "### Creating multi-graph: " << title << std::endl;
-	if (xArr.size() != yArr.size() 
-	|| (xArr.size() != labels.size() && labels.size() > 0)
-	|| (xArr.size() != uXArr.size() && uXArr.size() > 0)
-	|| (xArr.size() != uYArr.size() && uYArr.size() > 0)
-	)
+
+	if ((xArr.size() != yArr.size())// && !xArr1D)
+	||  (yArr.size() != labels.size() && labels.size() > 0)
+	||  (yArr.size() != uXArr.size() && uXArr.size() > 0)
+	||  (yArr.size() != uYArr.size() && uYArr.size() > 0))
 	{
 		std::cout << "ERROR: Number of multi-graph entries inconsistent!" << std::endl;
 		std::cout << "Size of 1st dimension of x array: " << xArr.size() << std::endl;
@@ -950,8 +1148,17 @@ void saveMultiGraph(std::string outputFile, std::string title,
 		exit(1);
 	}
 	bool deleteLeg = false; // only delete if it wasn't passed in
+	bool deleteCan = false;
 
-	TCanvas *c = new TCanvas("cmg", title.c_str());
+	if (c == NULL)
+	{
+		c = new TCanvas("cmg", title.c_str());
+		deleteCan = true;
+	}
+	else
+	{
+		c->SetTitle(title.c_str());
+	}
 	c->cd();
 	TMultiGraph *mg = new TMultiGraph("mg", title.c_str());
 	if (leg == NULL && labels.size() > 0)
@@ -990,19 +1197,21 @@ void saveMultiGraph(std::string outputFile, std::string title,
 	c->Modified();
 	c->Update();
 	c->SaveAs(outputFile.c_str());
+
 	if (deleteLeg) delete leg; 
-	delete mg; delete c;
+	delete mg;
+	if (deleteCan) {std::cout << "deleting c" << std::endl; delete c;}
 	return;
 }
 
 void saveMultiGraph(std::string outputFile, std::string title,
 		std::vector<std::vector<double>> &xArr, std::vector<std::vector<double>> &yArr,
 		std::string xLabel, std::string yLabel, std::vector<std::string> labels,
-		TLegend *leg = NULL)
+		TCanvas *c = NULL, TLegend *leg = NULL)
 {
 	std::vector<std::vector<double>> uXArr;
 	std::vector<std::vector<double>> uYArr;
-	saveMultiGraph(outputFile, title, xArr, yArr, xLabel, yLabel, labels, uXArr, uYArr, leg);
+	saveMultiGraph(outputFile, title, xArr, yArr, xLabel, yLabel, labels, uXArr, uYArr, c, leg);
 }
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -1179,6 +1388,22 @@ void ledPreAnalysis(std::string directory, std::string date, std::string mppcStr
 
 void preAnalyseFolder(std::string directory, std::string date, std::string outputDirectory)
 {
+
+	// XXX: TO REMOVE OR INCORPORATE IN A BETTER WAY!!!!!!!!
+	for (int i = 500; i < 676; i += 5)
+	{
+		ledFullVec.push_back(std::to_string(i));
+		ledShortVec.push_back(std::to_string(i));
+	}
+	for (int i = 680; i < 726; i += 5)
+	{
+		ledFullVec.push_back(std::to_string(i));
+	}
+	g_dcp.ledFullVec = ledFullVec;
+	g_dcp.ledShortVec = ledShortVec;
+
+	// XXX: END TO REMOVE
+
 	while (directory.back() == '/')
 	{
 		directory.pop_back();
@@ -1292,6 +1517,9 @@ highPeResult singleSetGaussFitting(TTree *t, std::string bias, std::string led,
 	TTreeReaderArray<Double_t> dataPico2(reader, str2.c_str());
 	reader.Next();
 
+	// XXX: genuinely dislike myself for writing this
+	std::string title = (t->GetName() + (" " + led) + "mV/" + bias + "V ").substr(4);
+
 	if (dataPico1.GetSize() != dataPico2.GetSize())
 	{
 		std::cout << "ERROR: inconsistent array sizes" << std::endl;
@@ -1315,7 +1543,7 @@ highPeResult singleSetGaussFitting(TTree *t, std::string bias, std::string led,
 
 	double padding = (chargeMax - chargeMin) * 0.05;
 
-	return highPeAnalysis(fullData, n, chargeMin - padding, chargeMax + padding, 500);
+	return highPeAnalysis(fullData, n, chargeMin - padding, chargeMax + padding, 500, title);
 	// XXX: global parameters for some of this should be used instead of hardcoded
 }
 
@@ -1374,6 +1602,8 @@ individualPeResult singleSetPoissFitting(TTree *t, std::string bias, std::string
 	TTreeReaderArray<Double_t> dataPico2(reader, str2.c_str());
 	reader.Next();
 
+	std::string title = (t->GetName() + (" " + led) + "mV/" + bias + "V ").substr(4);
+
 	if (dataPico1.GetSize() != dataPico2.GetSize())
 	{
 		std::cout << "ERROR: inconsistent array sizes" << std::endl;
@@ -1397,7 +1627,7 @@ individualPeResult singleSetPoissFitting(TTree *t, std::string bias, std::string
 
 	double padding = (chargeMax - chargeMin) * 0.05;
 
-	return individualPeAnalysis(fullData, n, chargeMin - padding, chargeMax + padding, g_nBins);
+	return individualPeAnalysis(fullData, n, chargeMin - padding, chargeMax + padding, g_nBins, title);
 	// XXX: global parameters for some of this should be used instead of hardcoded
 }
 
@@ -1406,8 +1636,8 @@ std::vector<std::vector<std::vector<individualPeResult>>> poissFitting(
 		std::vector<std::string> pico)
 {
 	int numFits = 3 //forest.size() 
-			* (dcp.biasFullVec.size() * (int) std::count_if(dcp.ledShortVec.begin(), dcp.ledShortVec.end(), [](std::string s) {return std::stoi(s) < g_highPeCutoff;})
-			+ dcp.biasShortVec.size() * (int) std::count_if(dcp.ledFullVec.begin(), dcp.ledFullVec.end(), [](std::string s) {return std::stoi(s) < g_highPeCutoff;}));
+			* (dcp.biasFullVec.size() * (int) std::count_if(dcp.ledShortVec.begin(), dcp.ledShortVec.end(), [](std::string s) {return std::stoi(s) <= g_highPeCutoff;})
+			+ dcp.biasShortVec.size() * (int) std::count_if(dcp.ledFullVec.begin(), dcp.ledFullVec.end(), [](std::string s) {return std::stoi(s) <= g_highPeCutoff;}));
 	int current = 0;
 	progressBar(current, numFits, "Poissonian-Gaussian Fitting");
 
@@ -1495,7 +1725,7 @@ std::vector<std::vector<int32_t>> timestampExtraction(
 	return timestamps;
 }
 
-fileResults genericAnalysis(std::string filePath, std::string outputDir, bool fit)
+fileResults genericAnalysis(std::string filePath, std::string outputDir, bool fit = true)
 {
 	TFile *file = TFile::Open(filePath.c_str(), "READ");
 
@@ -1520,6 +1750,9 @@ fileResults genericAnalysis(std::string filePath, std::string outputDir, bool fi
 
 	std::vector<std::string> allBias(*biasFullVec);
 	allBias.insert(allBias.end(), biasShortVec->begin(), biasShortVec->end());
+	
+	std::vector<double> allBiasDouble;
+	for (std::string bias : allBias) allBiasDouble.push_back(std::stod(bias));
 
 	std::vector<double> ledShortX;
 	for (std::string led : *ledShortVec) ledShortX.push_back(std::stod(led));
@@ -1549,10 +1782,11 @@ fileResults genericAnalysis(std::string filePath, std::string outputDir, bool fi
 	gStyle->SetStatX(0.4);
 	gStyle->SetStatY(0.85);
 	gStyle->SetOptStat(0);
-	gStyle->SetOptFit(11);
-	gaussFits = gaussFitting(dcp, forest, *picoscopeNames);
-	std::cout << std::endl;
-	std::cout << "###### Finished Gaussian Fitting" << std::endl;
+	gStyle->SetOptFit(1111);
+
+	// gaussFits = gaussFitting(dcp, forest, *picoscopeNames);
+	// std::cout << std::endl;
+	// std::cout << "###### Finished Gaussian Fitting" << std::endl;
 
 	poissFits = poissFitting(dcp, forest, *picoscopeNames);
 	std::cout << std::endl;
@@ -1572,46 +1806,127 @@ fileResults genericAnalysis(std::string filePath, std::string outputDir, bool fi
 	}
 
 	std::vector<std::vector<highPeResult>> pmtGauss = gaussFits.at(3);
+	std::vector<std::vector<double>> pmtArr;
+	std::vector<std::vector<double>> uPmtArr;
+	std::vector<std::vector<double>> ledArr;
+	std::vector<std::vector<double>> emptyArr;
+	std::vector<double> emptyVec;
 
-	std::string xLabel = "PMT Signal [mV ns]";
-	std::string yLabel = "MPPC Signal [mV ns]";
+	for (int j = 0 ; j < (int) pmtGauss.size() ; j++)
+	{
+		std::string bias = allBias.at(j);
+		std::vector<double> pmt; // mean pmt [mV ns]
+		std::vector<double> uPmt;
 
-	TCanvas *Ctmp = new TCanvas("temp", "temp", 100, 100);
+		for (int k = 0 ; k < (int) pmtGauss.at(j).size() ; k++)
+		{
+			pmt.push_back(pmtGauss.at(j).at(k).mean * -1);
+			uPmt.push_back(pmtGauss.at(j).at(k).sigma);
+		}
+		pmtArr.push_back(pmt);
+		uPmtArr.push_back(uPmt);
+		ledArr.push_back((j < (int) biasFullVec->size()) ? ledShortX : ledFullX);
+	}
+
+	std::string pmtLabel = "PMT Signal [mV ns]";
+	std::string mppcLabel = "MPPC Signal [mV ns]";
+	std::string mppcPeLabel = "MPPC Signal [PE]";
+	std::string ledLabel = "LED Pulsed Voltage [mV]";
+	std::string pmtTitle = "PMT Light Response";
+	std::string peLabel = "Single PE Signal size [mV ns]";
+	std::string gainLabel = "Gain";
+	std::string biasLabel = "MPPC Bias Voltage [V]";
+	std::string overLabel = "MPPC Overvoltage [V]";
+
+	TCanvas *cLogY = new TCanvas();
+	cLogY->SetLogy();
+	TCanvas *cLogXY = new TCanvas();
+	cLogXY->SetLogx();
+	cLogXY->SetLogy();
+
+	TCanvas *Ctmp = new TCanvas("temp", "temp");
 	Ctmp->SaveAs((pdfFile + "[").c_str());
+	// saveMultiGraph(pdfFile, pmtTitle, ledArr, pmtArr, ledLabel, pmtLabel, allBias, emptyArr, uPmtArr);
+	saveMultiGraph(pdfFile, pmtTitle, ledArr, pmtArr, ledLabel, pmtLabel, allBias);
+	saveMultiGraph(pdfFile, pmtTitle, ledArr, pmtArr, ledLabel, pmtLabel, allBias, cLogY);
 
 	for (int i = 0 ; i < 3 ; i++)
 	{
-		std::string title = "MPPC " + (*mppcNumbers).at(i) + " Intensity Dependence";
+		std::string mppcN = mppcNumbers->at(i);
+		std::string title = "MPPC " + mppcN + " Intensity Dependence";
+		std::string titlePe = "MPPC " + mppcN + " PE Peak Separation";
+		std::string titleGain1 = "MPPC " + mppcN + " Gain (V_{b} - V_{Br})";
+		std::string titleGain2 = "MPPC " + mppcN + " Gain (SPE / q)";
+		std::string titleGainRatio = "MPPC " + mppcN + " Gain (SPE / V_{b} - V_{Br})";
 
 		std::vector<std::vector<highPeResult>> chGauss = gaussFits.at(i);
 		std::vector<std::vector<individualPeResult>> chPoiss = poissFits.at(i);
 
-		std::vector<std::vector<double>> xArr;
-		std::vector<std::vector<double>> yArr;
+		std::vector<std::vector<double>> mppcArr;
+		std::vector<std::vector<double>> mppcPeArr;
+		std::vector<double> peSepVec;
 
 		for (int j = 0 ; j < (int) chGauss.size() ; j++)
 		{
-			// TODO: Shrink this into multigraph function already written
 			std::string bias = allBias.at(j);
 			std::vector<highPeResult> biasGauss = chGauss.at(j);
 			std::vector<individualPeResult> biasPoiss = chPoiss.at(j);
-			std::vector<double> x; // mean pmt [mV ns]
-			std::vector<double> y; // mean mppc [mV ns]
+			std::vector<double> mppc; // mean mppc [mV ns]
+			std::vector<double> mppcPe; // mean mppc [PE]
+
+			int ledIndex = getIndex((j < (int) biasFullVec->size()) 
+					? *ledShortVec : *ledFullVec, g_pePlotLedV);
+			
+			double peSep = biasPoiss.at(ledIndex).pePeakSeparation;
+			peSepVec.push_back(peSep * -1);
 
 			for (int k = 0 ; k < (int) biasGauss.size() ; k++)
 			{
-				y.push_back(biasGauss.at(k).mean * -1);
-				x.push_back(pmtGauss.at(j).at(k).mean * -1);
+				mppc.push_back(biasGauss.at(k).mean * -1);
+				mppcPe.push_back(biasGauss.at(k).mean / peSep);
 			}
-			xArr.push_back(x);
-			yArr.push_back(y);
+			mppcArr.push_back(mppc);
+			mppcPeArr.push_back(mppcPe);
 		}
 
-		saveMultiGraph(pdfFile, title, xArr, yArr, xLabel, yLabel, allBias);
+		saveMultiGraph(pdfFile, title, pmtArr, mppcArr, pmtLabel, mppcLabel, allBias);
+		saveMultiGraph(pdfFile, title, pmtArr, mppcPeArr, pmtLabel, mppcPeLabel, allBias);
+		saveMultiGraph(pdfFile, title + " Log XY Scale", pmtArr, mppcArr, pmtLabel, mppcLabel, allBias, cLogXY);
+		saveMultiGraph(pdfFile, title + " Log XY Scale", pmtArr, mppcPeArr, pmtLabel, mppcPeLabel, allBias, cLogXY);
+		saveMultiGraph(pdfFile, title, ledArr, mppcArr, ledLabel, mppcLabel, allBias);
+		saveMultiGraph(pdfFile, title, ledArr, mppcPeArr, ledLabel, mppcPeLabel, allBias);
+		saveMultiGraph(pdfFile, title + " Log Y Scale", ledArr, mppcArr, ledLabel, mppcLabel, allBias, cLogY);
+		saveMultiGraph(pdfFile, title + " Log Y Scale", ledArr, mppcPeArr, ledLabel, mppcPeLabel, allBias, cLogY);
+		TFitResultPtr res = saveGraph(pdfFile, titlePe, allBiasDouble, peSepVec, biasLabel, peLabel, true);
+		double vBr = -1 * res->Parameter(0) / res->Parameter(1);
+		std::cout << vBr << std::endl;
+		
+		std::vector<double> gainVec1;
+		std::vector<double> gainVec2;
+		std::vector<double> gainRatioVec;
+		std::vector<double> allOverV;
+		for (int j = 0 ; j < (int) allBiasDouble.size() ; j++)
+		{
+			double overV = (allBiasDouble.at(j) - vBr) / 2;
+			allOverV.push_back(overV);
+			gainVec1.push_back(g_terminalCap * overV
+					/ (g_elementaryCharge * g_pixelsPerCh)); // shouldn't be here: g_ampGain * g_splitter * 
+			gainVec2.push_back(peSepVec.at(j) * 1e-12
+					/ (50 * g_ampGain * g_splitter * g_elementaryCharge));
+			gainRatioVec.push_back(peSepVec.at(j) * 1e-12 * g_pixelsPerCh
+					/ (g_terminalCap * overV * 50 * g_ampGain * g_splitter));
+		}
+		saveGraph(pdfFile, titleGain1, allBiasDouble, gainVec1, biasLabel, gainLabel, true);
+		saveGraph(pdfFile, titleGain1, allOverV, gainVec1, overLabel, gainLabel, true);
+		saveGraph(pdfFile, titleGain2, allBiasDouble, gainVec2, biasLabel, gainLabel, true);
+		saveGraph(pdfFile, titleGain2, allOverV, gainVec2, overLabel, gainLabel, true);
+		saveGraph(pdfFile, titleGainRatio, allOverV, gainRatioVec, overLabel, gainLabel, true);
 	}
 	Ctmp->SaveAs((pdfFile + "]").c_str());
-	std::cout << g_maxPeaks << std::endl;
+	// std::cout << g_maxPeaks << std::endl;
 	delete Ctmp; delete minOpt;
+
+	delete cLogY; delete cLogXY;
 
 	file->Close();
 	return res;
@@ -1623,11 +1938,6 @@ void rotationAnalysis(std::string outputDir, std::string dataFile1, std::string 
 	// combines the two picoscope readouts, it is more difficult to utilise like this
 	// and needs to be reimplemented
 
-}
-
-fileResults genericAnalysis(std::string filePath, std::string outputDir)
-{
-	return genericAnalysis(filePath, outputDir, true);
 }
 
 void cycleAnalysis(std::string file1, std::string file2, std::string file3, 
@@ -1761,8 +2071,7 @@ void tempAnalysis(std::string outputDir, std::string envDataFile,
 	std::vector<std::string> allBias(resVec.at(0).dcp.biasFullVec);
 	allBias.insert(allBias.end(), resVec.at(0).dcp.biasShortVec.begin(), resVec.at(0).dcp.biasShortVec.end());
 
-	auto biasPtr = std::find(allBias.begin(), allBias.end(), "81");
-	const int biasIndex = std::distance(allBias.begin(), biasPtr);
+	const int biasIndex = getIndex(allBias, std::string("81"));
 	std::vector<std::string> labels = biasIndex < (int) resVec.at(0).dcp.biasFullVec.size() ?
 			resVec.at(0).dcp.ledShortVec : resVec.at(0).dcp.ledFullVec;
 
@@ -2064,6 +2373,20 @@ int main(int argc, char **argv)
 		std::string dataFile1(argv[3]);
 		std::string dataFile2(argv[4]);
 		rotationAnalysis(outputDir, dataFile1, dataFile2);
+	}
+	else if (analysisType == "check-hist")
+	{
+		if (argc != 5)
+		{
+			std::cerr << "ERROR: you should have 4 parameters, please look in 'launch_analysis.sh'..." << std::endl;
+			return 1;
+		}
+		std::string outputDir(argv[2]);
+		std::string inputFile(argv[3]);
+		std::string mppcNum(argv[4]); // The mppc number you want to check
+		std::string bias(argv[5]);
+		std::string led(argv[6]);
+		std::cout << "Still unimplemented" << std::endl;
 	}
 	return 0;
 }

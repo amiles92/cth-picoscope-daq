@@ -17,6 +17,7 @@
 #include <unistd.h>
 #include <variant>
 #include <vector>
+#include <numeric>
 
 // ROOT dependencies
 #include "TAttFill.h"
@@ -211,8 +212,7 @@ const int64_t factorialLookUp[21] = {
 ///                          Extraction Parameters                          ///
 ///////////////////////////////////////////////////////////////////////////////
 
-const std::vector<int>
-	ps6000VRanges{10, 20, 50, 100, 200, 500, 1000, 2000, 5000, 10000, 20000, 50000};
+const std::vector<int> VRanges{10, 20, 50, 100, 200, 500, 1000, 2000, 5000, 10000, 20000, 50000};
 const bool showHeader(false);
 const bool positiveSignals = false;
 const int g_jstOffset = 32400; // 9 hours in seconds
@@ -223,16 +223,10 @@ const int g_jstOffset = 32400; // 9 hours in seconds
 ///                            Common Parameters                            ///
 ///////////////////////////////////////////////////////////////////////////////
 
-// XXX: To remove
-const std::vector<std::string> MPPCsHV{/*"78V", "78.5V", "79V", "79.5V","80V", "80.5V", */ "81V" /*, "81.5V", "82V", "82.5V", "83V"*/};
-const std::vector<std::string> LEDV{"Dark", "805mV", "810mV", "820mV", "840mV", "870mV", "890mV"};
-const std::vector<std::string> PMTV{"1.2kV" /*, "1.25kV", "1.3kV", "1.35kV", "1.4kV", "1.45kV", "1.5kV"*/};
-// XXX: end
-
 const std::vector<std::string> biasFullVec{"78", "78.5", "79", "79.5", "80", "82", "82.5", "83"};
-const std::vector<std::string> ledFullVec{"820", "840", "850", "880", "890", "900"};
+// const std::vector<std::string> ledFullVec{"820", "840", "850", "880", "890", "900"};
 const std::vector<std::string> biasShortVec{"80.5", "81", "81.5"};
-const std::vector<std::string> ledShortVec{"840", "880", "900"};
+// const std::vector<std::string> ledShortVec{"840", "880", "900"};
 const std::string g_pmt("1.4kV");
 const std::vector<std::string> picoscopeNames{"IW098-0028", "IW114-0004"};
 
@@ -241,9 +235,12 @@ const std::vector<std::string> picoscopeNames{"IW098-0028", "IW114-0004"};
 // const std::vector<std::string> ledFullVec{};
 // const std::vector<std::string> biasShortVec{};
 // const std::vector<std::string> ledShortVec{"805", "810", "820", "840", "870", "890"};
+
+std::vector<std::string> ledShortVec;
+std::vector<std::string> ledFullVec;
 // TEMP
 
-const dataCollectionParameters g_dcp{biasFullVec, ledFullVec, biasShortVec, ledShortVec};
+dataCollectionParameters g_dcp{biasFullVec, ledFullVec, biasShortVec, ledShortVec};
 
 ///////////////////////////////////////////////////////////////////////////////
 ///                         Pre-Analysis Parameters                         ///
@@ -285,13 +282,19 @@ const std::vector<std::vector<std::string>> titles{{"First 100 waveforms for ch"
 // const int g_nPeaks = 3; // number of PE peaks to attempt to fit
 // XXX: g_saveAllPlots unimplemented so far
 const bool g_saveAllPlots = true; // save all produced hists to chonky pdf, recommend leave off unless debugging
-const int g_highPeCutoff = 845; // LED values below are treated as individual PE,  above is high PE
+const int g_highPeCutoff = 560; // LED values below are treated as individual PE,  above is high PE
 const int g_nBins = 500;
+const std::string g_pePlotLedV = "545";
 
-const int g_threads = 2;
+const int g_threads = 4;
 TColor *col = gROOT->GetColor(10);
 
-const std::string g_tmpPdf = "/home/amiles/Documents/PhD/mppc-qc/plots/7-8-9_tmpbase.pdf";
+const double g_ampGain = 25.56; // 10^2.815
+const double g_splitter = 0.668; // 10^(0.3 insertion loss + 0.05 extra loss for given freq)
+const double g_terminalCap = 500e-12; // terminal capacitance // might be 900???
+const double g_elementaryCharge = 1.602176634e-19;
+const double g_pixelsPerCh = 3531;
+
 int g_plots = 0;
 int g_maxPeaks = 0;
 
