@@ -494,6 +494,8 @@ int clearFunctionGenerator()
         return 0;
     }
     ClearPulseGen(&g_unit);
+    CloseDevice(&g_unit);
+    g_dcc.unitInitialised = FALSE;
     return 1;
 }
 

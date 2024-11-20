@@ -42,6 +42,11 @@ def initPicoScopes(picoList, fnGen):
         print("Python - Device not opened")
         exit()
 
+def closePicoscopes():
+    daq.multiSeriesCloseDaq()
+    gen.clearFunctionGenerator()
+    return
+
 def runBigSweep(bias, mppcStr, date, pmt, d, extra):
     """
     Runs extra big DAQ with fine sweeping of 5mV increments
@@ -256,6 +261,7 @@ def main(mppcList, reset, extra=''):
         print("    DO NOT USE THE PURE WHITE \"RANGE\" BUTTONS!!!")
         exit()
     
+    closePicoscopes()
     print("Total elapsed time:", int(time.time() - start), "s")
     endNotification()
 
