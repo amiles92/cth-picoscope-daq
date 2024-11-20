@@ -54,11 +54,9 @@ def runBigSweep(bias, mppcStr, date, pmt, d, extra):
     
     runDark(outFilePattern)
 
-    runMvList(2, outFilePattern, range(545, 561, 5), 2)
-    runMvList(3, outFilePattern, range(565, 576, 5), 3)
-    runMvList(4, outFilePattern, range(580, 591, 5), 4)
-    runMvList(5, outFilePattern, range(595, 621, 5), 5)
-    runMvList(6, outFilePattern, range(625, 646, 5), 6)
+    runMvList(2, outFilePattern, [525, 540, 545], 2)
+    runMvList(4, outFilePattern, [565, 575, 585], 4)
+    runMvList(6, outFilePattern, [600, 610, 620, 630], 6)
 
 def daqPerBias(bias, mppcStr, mvLists, date, pmt, d, extra):
     """Runs DAQ for a range of LED Voltages for a given bias voltage"""
