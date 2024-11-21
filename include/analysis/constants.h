@@ -140,7 +140,8 @@ struct pmtResult
 	double amplitude;  double uAmplitude;
 	double location;   double uLocation;
 	double scale;      double uScale;
-	double alpha;      double uSlpha;
+	double alpha;      double uAlpha;
+	double mean;       double uMean;
 	double chi2;
 };
 
@@ -182,7 +183,9 @@ struct fileResults
 	std::vector<std::vector<std::vector<darkResult>>> darkFits;
 };
 
-const double g_2pi = 2 * 3.14159265358979323846264338327950288419716939937510582097494459230781640628620899L;
+const double g_pi = 3.14159265358979323846264338327950288419716939937510582097494459230781640628620899L;
+const double g_2pi = 2 * g_pi;
+const double g_sqrt2_pi = sqrt(2 / g_pi);
 
 const int64_t factorialLookUp[21] = {
 	1,
@@ -249,7 +252,7 @@ dataCollectionParameters g_dcp{biasFullVec, ledFullVec, biasShortVec, ledShortVe
 const uint32_t g_baselineLowerWindow = 0;
 const uint32_t g_baselineUpperWindow = 100; // so fitting is a bit more reliable
 const uint32_t g_integratedLowerWindow = 160;
-const uint32_t g_integratedUpperWindow = 210;
+const uint32_t g_integratedUpperWindow = 275;
 
 bool g_quickPreAnalysis = false;
 const uint32_t g_quickBaselineLowerWindow = 0;
@@ -282,9 +285,9 @@ const std::vector<std::vector<std::string>> titles{{"First 100 waveforms for ch"
 // const int g_nPeaks = 3; // number of PE peaks to attempt to fit
 // XXX: g_saveAllPlots unimplemented so far
 const bool g_saveAllPlots = true; // save all produced hists to chonky pdf, recommend leave off unless debugging
-const int g_highPeCutoff = 560; // LED values below are treated as individual PE,  above is high PE
-const int g_nBins = 500;
-const std::string g_pePlotLedV = "545";
+const int g_highPeCutoff = 545; // LED values equal or below are treated as individual PE,  above is high PE
+const int g_nBins = 250;
+const std::string g_pePlotLedV = "540";
 
 const int g_threads = 4;
 TColor *col = gROOT->GetColor(10);

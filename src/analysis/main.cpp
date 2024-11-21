@@ -657,6 +657,11 @@ double square(const double x)
 	return x * x;
 }
 
+double cube(const double x)
+{
+	return x * x * x;
+}
+
 int64_t factorial(const int64_t n) // up to 20
 {
 	return factorialLookUp[n];
@@ -720,13 +725,6 @@ std::vector<int> findLocalMaxima(std::vector<double> &data, double height)
 	int i;
 	for (i = 1 ; i < (int) data.size() - 1; i++)
 	{
-		// std::cout << "i: " << i;
-		// if (data.at(i) > data.at(i - 1)) continue;
-		// std::cout << " - 1" << std::endl;
-		// if (data.at(i) > data.at(i + 1)) continue;
-		// std::cout << " - 2" << std::endl;
-		// if (data.at(i) >= height) continue;
-		// std::cout << " - 3" << std::endl;
 		if (data.at(i) > data.at(i - 1) && data.at(i) > data.at(i + 1)
 				&& data.at(i) >= height) 
 		maxima.push_back(i + 1);
@@ -738,20 +736,21 @@ std::vector<int> findLocalMaxima(std::vector<double> &data, double height)
 }
 
 std::vector<int> findSeparateMaxima(std::vector<double> &data, 
-		std::vector<int> &maxima, int separation)
+		std::vector<double> &positions, std::vector<int> &maxima, double separation)
 {
 	std::vector<bool> keepVec(maxima.size());
 	std::vector<int> sortedIndices(maxima.size());
 	std::iota(sortedIndices.begin(), sortedIndices.end(), 0);
 	std::sort(sortedIndices.begin(), sortedIndices.end(), 
-			[&](int a, int b) {return data.at(a) < data.at(b);});
+			[&](int a, int b) {return data.at(a) > data.at(b);});
 
 	for (int ind : sortedIndices)
 	{
 		int keep = true;
 		for (int i = 0 ; i < ind ; i++)
 		{
-			if (std::abs(maxima.at(i) - maxima.at(ind)) < separation) keep = false;
+			if (!keepVec.at(sortedIndices.at(i))) continue;
+			if (std::abs(positions.at(maxima.at(sortedIndices.at(i))) - positions.at(maxima.at(ind))) < separation) keep = false;
 		}
 		keepVec.at(ind) = keep;
 	} 
@@ -782,7 +781,26 @@ std::vector<int> findProminentMaxima(std::vector<double> &data,
 
 	for (int i = 0 ; i < (int) maxima.size() ; i++)
 	{
-		if (minVector.at(i) < prominence && minVector.at(i + 1) < prominence) out.push_back(maxima.at(i));
+		double val = data.at(maxima.at(i));
+		// std::cout << "val: " << val << " - minVal_left: " << minVector.at(i) << " - minVal_right: " << minVector.at(i+1) << std::endl;
+		int leftInd, rightInd;
+		for (leftInd = i ; leftInd >= 0 ; leftInd--)
+		{
+			if (data.at(maxima.at(leftInd)) > val + 0.001) break;
+		}
+		for (rightInd = i; rightInd < (int) maxima.size() ; rightInd++)
+		{
+			if (data.at(maxima.at(rightInd)) > val + 0.001) break;
+		}
+		// std::cout << "val: " << val << std::endl;
+		// std::cout << "leftInd: " << leftInd << std::endl;
+		// std::cout << "rightInd: " << rightInd << std::endl;
+
+		double leftMin = (*std::min_element(minVector.begin() + leftInd, minVector.begin() + i + 1));
+		// std::cout << "leftMin: " << leftMin << std::endl;
+		double rightMin = (*std::min_element(minVector.begin() + i + 1, minVector.begin() + rightInd + 2));
+		// std::cout << "rightMin: " << rightMin << std::endl;
+		if (val - leftMin > prominence && val - rightMin > prominence) out.push_back(maxima.at(i));
 	}
 
 	return out;
@@ -791,14 +809,20 @@ std::vector<int> findProminentMaxima(std::vector<double> &data,
 std::vector<int> findPeaks(TH1D* hist)
 {
 	std::vector<double> data(hist->GetNbinsX());
-	for (int i = 0 ; i < hist->GetNbinsX() ; i++) data.push_back(hist->GetBinContent(i));
-	std::vector<int> peaks = findLocalMaxima(data, 80);
-	peaks = findSeparateMaxima(data, peaks, 30); // XXX: currently separated by bins, but maybe should change to real values?
-	peaks = findProminentMaxima(data, peaks, 50);
+	std::vector<double> positions(hist->GetNbinsX());
+	for (int i = 0 ; i < hist->GetNbinsX() ; i++) 
+	{
+		data.at(i) = hist->GetBinContent(i);
+		positions.at(i) = hist->GetBinCenter(i);
+	}
+
+	std::vector<int> peaks = findLocalMaxima(data, 50);
+	peaks = findSeparateMaxima(data, positions, peaks, 30);
+	peaks = findProminentMaxima(data, peaks, 200);
 	return peaks;
 }
 
-std::vector<double> initialGuesses(TH1D* hist)
+std::vector<double> initialGuesses(TH1D* hist, std::vector<int> &finPeaks)
 {
 	std::vector<int> peaks = findPeaks(hist);
 	double binWidth = hist->GetXaxis()->GetBinWidth(0);
@@ -813,7 +837,10 @@ std::vector<double> initialGuesses(TH1D* hist)
 			{return hist->GetBinContent(a) < hist->GetBinContent(b);});
 	double lambdaGuess = hist->GetBinCenter(index) / separation;
 
-	std::vector<double> outVec = {separation, lambdaGuess};
+	double nPeaks = peaks.size();
+	std::vector<double> outVec = {separation, lambdaGuess, nPeaks};
+
+	finPeaks = peaks;
 
 	return outVec;
 }
@@ -835,8 +862,9 @@ individualPeResult individualPeAnalysis(const double* data, const int nWfs,
 		hist->Fill(data[i]);
 	}
 
-	std::vector<int> peaks = findPeaks(hist);
-	std::vector<double> guesses = initialGuesses(hist);
+	std::vector<int> peaks;
+	std::vector<double> guesses = initialGuesses(hist, peaks); 
+	// XXX: STILL NOT WORKING PERFECTLY
 
 	hist->Sumw2();
 
@@ -846,12 +874,14 @@ individualPeResult individualPeAnalysis(const double* data, const int nWfs,
 	int bestIndex = 0;
 	TH1D* bestHist = (TH1D*) hist->Clone();
 
-	for (int i = 2 ; i < 10 ; i++)
+	int initN = guesses.size() ? guesses.at(2) : 2;
+
+	for (int i = initN ; i < 10 ; i++)
 	{
 		if (guesses.size() == 0)
 		{
 			fn->SetParameter(1, 3);
-			fn->SetParameter(4, -50);
+			fn->SetParameter(4, -75);
 		}
 		else
 		{
@@ -863,11 +893,12 @@ individualPeResult individualPeAnalysis(const double* data, const int nWfs,
 		fn->SetParLimits(2, -20, 15);
 		fn->SetParameter(3, 1);
 		fn->SetParLimits(3, 0.1, 25);
+		fn->SetParLimits(4, -100, -30);
 		fn->SetParameter(5, 0.5);
 		fn->SetParLimits(5, 0.1, 8);
 		fn->FixParameter(6, i);
 		fn->SetParameter(7, 500);
-		fn->SetParLimits(7, 50, nWfs);
+		fn->SetParLimits(7, 50, 2 * nWfs);
 		fn->FixParameter(8, 2); //XXX: temp fix to test peak fitting
 		// fn->SetParLimits(8, 0.1, 12);
 		for (int j = 0 ; j < 9 ; j++) fn->SetParError(j, 0);
@@ -896,23 +927,32 @@ individualPeResult individualPeAnalysis(const double* data, const int nWfs,
 	bestHist->GetYaxis()->SetTitle("Counts");
 	bestHist->Draw();
 
-	int j = 0;
-	for (int i = 0 ; i < hist->GetNbinsX() ; i++)
+	std::vector<double> x;
+	std::vector<double> y;
+	for (int ind : peaks)
 	{
-		if (i == peaks.at(j))
-		{
-			j++;
-			if (j == (int) peaks.size()) j = 0;
-		}
-		else
-		{
-			bestHist->SetBinContent(i, 0);
-		}
+		x.push_back(hist->GetXaxis()->GetBinCenter(ind));
+		y.push_back(hist->GetBinContent(ind));
 	}
 
-	bestHist->Draw("same func p");
+	if (peaks.size())
+	{
+		TGraph* gr = new TGraph(x.size(), x.data(), y.data());
 
-	c->SaveAs("/home/amiles/Documents/PhD/mppc-qc/plots/tmpPoiss.pdf");
+		gr->SetMarkerStyle(8);
+		gr->SetMarkerColor(kOrange);
+		gr->SetMarkerSize(1);
+		gr->Draw("P");
+		c->Modified();
+		c->Update();
+		c->SaveAs("/home/amiles/Documents/PhD/mppc-qc/plots/tmpPoiss.pdf");
+		delete gr;
+	}
+	else
+	{
+		bestHist->Draw();
+		c->SaveAs("/home/amiles/Documents/PhD/mppc-qc/plots/tmpPoiss.pdf");
+	}
 
 	delete hist;
 	delete bestHist;
@@ -970,11 +1010,30 @@ double sgPtr(double *x, double *p)
 	return skewedGaussDistribution(x[0], p[0], p[1], p[2], p[3]);
 }
 
+std::vector<double> skewGaussianMean(TFitResultPtr res)
+{
+	std::vector<double> out;
+	double loc = res->Parameter(1);
+	double scale = res->Parameter(2);
+	double alpha = res->Parameter(3);
+	double uLoc = res->ParError(1);
+	double uScale = res->ParError(2);
+	double uAlpha = res->ParError(3);
+
+	out.push_back(loc + scale * g_sqrt2_pi * alpha / sqrt(1 + square(alpha)));
+	out.push_back(sqrt(square(uLoc) +
+		square(uScale) * square(alpha) * 2 / (g_pi * (1 + square(alpha))) +
+		square(uAlpha) * 2 * square(scale) / (g_pi * cube(1 + square(alpha)))));
+
+	return out;
+}
+
 pmtResult pmtAnalysis(const double* data, const int nWfs,
-		const double xmin, const double xmax, const int nbins)
+		const double xmin, const double xmax, const int nbins, 
+		std::string title = "")
 {
 	TCanvas *c = new TCanvas("cskewgauss", "c");
-	TH1D* hist = new TH1D("hist", "PMT Signal", nbins, xmin, xmax);
+	TH1D* hist = new TH1D("hist", (title + "PMT Signal").c_str(), nbins, xmin, xmax);
 
 	for (int i = 0 ; i < nWfs ; i++)
 	{
@@ -994,17 +1053,18 @@ pmtResult pmtAnalysis(const double* data, const int nWfs,
 	TFitResultPtr res = hist->Fit("skewGauss","SQ");
 	// "S" returns resultptr, "Q" is to minimise printing at the end
 	// XXX: Consider adding option "L", log likelihood method
+	std::vector<double> meanVec = skewGaussianMean(res);
 
 	pmtResult a = {res->Parameter(0), res->ParError(0),
 				   res->Parameter(1), res->ParError(1),
 				   res->Parameter(2), res->ParError(2),
 				   res->Parameter(3), res->ParError(3),
+				   meanVec.at(0), meanVec.at(1),
 				   res->Chi2()};
 
 	hist->Sumw2(kFALSE);
 	hist->GetXaxis()->SetTitle("Integrated charge [mV ns]");
 	hist->GetYaxis()->SetTitle("Counts");
-	// hist->SetStats(0);
 	hist->Draw();
 	c->SaveAs("/home/amiles/Documents/PhD/mppc-qc/plots/tmpPmt.pdf");
 
@@ -1203,7 +1263,7 @@ void saveMultiGraph(std::string outputFile, std::string title,
 
 	if (deleteLeg) delete leg; 
 	delete mg;
-	if (deleteCan) {std::cout << "deleting c" << std::endl; delete c;}
+	if (deleteCan) delete c;
 	return;
 }
 
@@ -1554,7 +1614,7 @@ std::vector<std::vector<std::vector<highPeResult>>> gaussFitting(
 		dataCollectionParameters &dcp, std::vector<TTree*> forest,
 		std::vector<std::string> pico)
 {
-	int numFits = forest.size() * (dcp.biasFullVec.size() * dcp.ledShortVec.size()
+	int numFits = (forest.size() - 1) * (dcp.biasFullVec.size() * dcp.ledShortVec.size()
 				  				 + dcp.biasShortVec.size() * dcp.ledFullVec.size());
 	int current = 0;
 	progressBar(current, numFits, "Gaussian Fitting");
@@ -1564,6 +1624,7 @@ std::vector<std::vector<std::vector<highPeResult>>> gaussFitting(
 	std::vector<std::vector<std::vector<highPeResult>>> gaussFits;
 	for (TTree* t : forest)
 	{
+		if (t == forest.at(3)) continue;
 		std::vector<std::vector<highPeResult>> chGaussFits;
 		for (std::string bias : dcp.biasFullVec)
 		{
@@ -1638,7 +1699,7 @@ std::vector<std::vector<std::vector<individualPeResult>>> poissFitting(
 		dataCollectionParameters &dcp, std::vector<TTree*> forest,
 		std::vector<std::string> pico)
 {
-	int numFits = 3 //forest.size() 
+	int numFits = (forest.size() - 1)
 			* (dcp.biasFullVec.size() * (int) std::count_if(dcp.ledShortVec.begin(), dcp.ledShortVec.end(), [](std::string s) {return std::stoi(s) <= g_highPeCutoff;})
 			+ dcp.biasShortVec.size() * (int) std::count_if(dcp.ledFullVec.begin(), dcp.ledFullVec.end(), [](std::string s) {return std::stoi(s) <= g_highPeCutoff;}));
 	int current = 0;
@@ -1681,6 +1742,53 @@ std::vector<std::vector<std::vector<individualPeResult>>> poissFitting(
 	c->SaveAs("/home/amiles/Documents/PhD/mppc-qc/plots/tmpPoiss.pdf]");
 	delete c;
 	return poissFits;
+}
+
+pmtResult singleSetPmtFitting(TTree *t, std::string bias, std::string led, 
+		std::vector<std::string> pico)
+{
+	TTreeReader reader(t);
+	std::string str1 = bias + "_" + led + "_" + pico.at(0) + "_Charge.data";
+	std::string str2 = bias + "_" + led + "_" + pico.at(0) + "_Charge.data";
+	TTreeReaderArray<Double_t> dataPico1(reader, str1.c_str());
+	TTreeReaderArray<Double_t> dataPico2(reader, str2.c_str());
+	reader.Next();
+
+	std::string title = (t->GetName() + (" " + led) + "mV/" + bias + "V ").substr(4);
+
+	if (dataPico1.GetSize() != dataPico2.GetSize())
+	{
+		std::cout << "ERROR: inconsistent array sizes" << std::endl;
+		std::cout << " - dataPico1 Size: " << dataPico1.GetSize() << std::endl;
+		std::cout << " - dataPico2 Size: " << dataPico2.GetSize() << std::endl;
+	}
+	const int n = dataPico1.GetSize() + dataPico2.GetSize();
+	double fullData[n];
+	double chargeMin = dataPico1[0];
+	double chargeMax = dataPico1[0];
+	for (uint32_t i = 0 ; i < dataPico1.GetSize() ; i++)
+	{
+		fullData[i] = dataPico1[i];
+		fullData[i + dataPico1.GetSize()] = dataPico2[i];
+
+		if (dataPico1[i] < chargeMin) chargeMin = dataPico1[i];
+		if (dataPico2[i] < chargeMin) chargeMin = dataPico2[i];
+		if (dataPico1[i] > chargeMax) chargeMax = dataPico1[i];
+		if (dataPico2[i] > chargeMax) chargeMax = dataPico2[i];
+	}
+
+	double padding = (chargeMax - chargeMin) * 0.05;
+
+	return pmtAnalysis(fullData, n, chargeMin - padding, chargeMax + padding, g_nBins, title);
+	// XXX: global parameters for some of this should be used instead of hardcoded
+}
+
+std::vector<std::vector<pmtResult>> pmtFitting(
+		dataCollectionParameters &dcp, std::vector<TTree*> forest,
+		std::vector<std::string> pico)
+{
+	std::vector<std::vector<pmtResult>> res;
+	return res;
 }
 
 std::vector<std::vector<int32_t>> timestampExtraction(
@@ -1787,13 +1895,13 @@ fileResults genericAnalysis(std::string filePath, std::string outputDir, bool fi
 	gStyle->SetOptStat(0);
 	gStyle->SetOptFit(1111);
 
-	gaussFits = gaussFitting(dcp, forest, *picoscopeNames);
-	std::cout << std::endl;
-	std::cout << "###### Finished Gaussian Fitting" << std::endl;
-
 	poissFits = poissFitting(dcp, forest, *picoscopeNames);
 	std::cout << std::endl;
 	std::cout << "###### Finished Poissonian-Gaussian Fitting" << std::endl;
+
+	gaussFits = gaussFitting(dcp, forest, *picoscopeNames);
+	std::cout << std::endl;
+	std::cout << "###### Finished Gaussian Fitting" << std::endl;
 
 	timestamps = timestampExtraction(dcp, treeTimestamps, *picoscopeNames);
 
