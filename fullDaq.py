@@ -168,8 +168,11 @@ def main(mppcList, reset, extra=''):
     mppcStr = "-".join(mppcList)
     if extra != '':
         extra = '_' + extra
-    path = r"%s/%s%s/" % (directory, mppcStr, extra)
-    os.makedirs(path, exist_ok=True) 
+    if mppcStr == "999-999-999": # passing 999 999 999 will safely ramp down and exit the daq
+        reset = False
+    else:
+        path = r"%s/%s%s/" % (directory, mppcStr, extra)
+        os.makedirs(path, exist_ok=True)
 
     picoscopes = ['IW098/0028','IW114/0004']
     picohyphen = [ps.replace('/','-') for ps in picoscopes]
@@ -212,6 +215,9 @@ def main(mppcList, reset, extra=''):
         vc.rampDown(vs, jumpTarget, 0)
         vc.jumpVoltage(vs, 0)
         vs.instrument.write("*RST")
+
+    if mppcStr == "999-999-999":
+        exit()
 
     initPicoScopes(picoscopes, fnGen)
  

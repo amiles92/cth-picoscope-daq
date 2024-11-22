@@ -58,7 +58,9 @@ def readHeader(f):
     b = f.read(1)
     d['timebase'] = ord(b) >> 4
     d['activeChannels'] = byteBin(b)[4:]
-    d['activeTriggers'] = byteBin(f.read(1))[3:]
+    activeTriggers8bitReadout = byteBin(f.read(1))
+    d['activeTriggers'] = activeTriggers8bitReadout[3:]
+    d['8bitReadout'] = activeTriggers8bitReadout[2]
     d['auxTriggerThreshold'] = adc2mv(bytesTwos(f,2),6)
     for i in range(nCh):
         d['ch' + chr(ord('A') + i) + 'TriggerThreshold'] = adc2mv(bytesTwos(f,2),6)
@@ -85,8 +87,12 @@ def readData(f, d):
             continue
         nWf = d['numWaveforms']
         nSamples = d['ch' + chr(ord('A') + ch) + 'Samples']
-        chADCData = np.fromfile(f, dtype='>i2', count=nWf * nSamples).reshape((nWf,nSamples))
-        chData = adc2mv(chADCData, d['ch' + chr(ord('A') + ch) + 'VRange'])
+        if d['8bitReadout'] == '1':
+            chADCData = np.fromfile(f, dtype='i1', count=nWf * nSamples).reshape((nWf,nSamples))
+            chData = chADCData / 256.0 * ps6000VRanges[d['ch' + chr(ord('A') + ch) + 'VRange']]
+        else:
+            chADCData = np.fromfile(f, dtype='>i2', count=nWf * nSamples).reshape((nWf,nSamples))
+            chData = adc2mv(chADCData, d['ch' + chr(ord('A') + ch) + 'VRange'])
 
         data.append(chData)
 
@@ -101,7 +107,10 @@ def readDataAdc(f, d):
             continue
         nWf = d['numWaveforms']
         nSamples = d['ch' + chr(ord('A') + ch) + 'Samples']
-        chADCData = np.fromfile(f, dtype='>i2', count=nWf * nSamples).reshape((nWf,nSamples))
+        if d['8bitReadout'] == '1':
+            chADCData = np.fromfile(f, dtype='i1', count=nWf * nSamples).reshape((nWf,nSamples))
+        else:
+            chADCData = np.fromfile(f, dtype='>i2', count=nWf * nSamples).reshape((nWf,nSamples))
 
         data.append(chADCData)
 
@@ -157,8 +166,12 @@ def quickPlot(filePattern, nWfs=1000):
             ch = chr(ord('A') + i)
             chData, ax = data[i], axs[i // 2][i % 2]
             minData = np.min(chData[:nWfs], axis=1, keepdims=True) # only take first 1000 wfs, might be faster?
-            nBins = np.round(np.max(minData) - np.min(minData)) // 256 + 1
-            ax.hist(minData // 256, bins=nBins, alpha=0.7, label=ps)
+            if header['8bitReadout'] == '1':
+                nBins = np.round(np.max(minData) - np.min(minData)) + 1
+                ax.hist(minData, bins=nBins, alpha=0.7, label=ps)
+            else:
+                nBins = np.round(np.max(minData) - np.min(minData)) // 256 + 1
+                ax.hist(minData // 256, bins=nBins, alpha=0.7, label=ps)
             ax.set_title("Channel " + ch)
 
     axs[1][1].legend()
