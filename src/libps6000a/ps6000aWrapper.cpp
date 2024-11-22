@@ -195,11 +195,11 @@ void SetTimebase(UNIT *unit, uint8_t timebase, uint16_t maxChSamples) // Don't n
 
 }
 
-vector<vector<int16_t*>> SetDataBuffers(UNIT *unit, bitset<4> activeChannels, 
+vector<vector<void*>> SetDataBuffers(UNIT *unit, bitset<4> activeChannels, 
 	vector<uint16_t> samplesPostPerChannel, int16_t samplesPreTrigger, 
-	uint32_t numWaveforms, uint16_t maxPostSamples)
+	uint32_t numWaveforms, uint16_t maxPostSamples, bool bit8Buffers)
 {//Using rapid block mode only for now
-	vector<vector<int16_t*>> outBuffers(activeChannels.count());
+	vector<vector<void*>> outBuffers(activeChannels.count());
 
 	uint64_t nMaxSamples = activeChannels.count() * maxPostSamples;
 	uint64_t picoMaxSamples;
@@ -233,17 +233,18 @@ vector<vector<int16_t*>> SetDataBuffers(UNIT *unit, bitset<4> activeChannels,
 		}
 
 		uint32_t chSamples = samplesPreTrigger + samplesPostPerChannel.at(i);
-		outBuffers.at(activeCh) = vector<int16_t*>(numWaveforms);
+		outBuffers.at(activeCh) = vector<void*>(numWaveforms);
 
 		for (uint64_t j = 0; j < numWaveforms; j++)
 		{
-			outBuffers.at(activeCh).at(j) = (int16_t*) calloc(chSamples, sizeof(int16_t));
+			outBuffers.at(activeCh).at(j) = calloc(chSamples, bit8Buffers ? sizeof(int8_t) : sizeof(int16_t));
 			if (outBuffers.at(activeCh).at(j) == NULL)
 			{
 				printf("Memory allocation failed: Ch %d, Wf %d\n", i, (int) j);
 			}
 			ps6000aSetDataBuffer(unit->handle, (PICO_CHANNEL) (i),
-				outBuffers.at(activeCh).at(j), chSamples, PICO_INT16_T, j, 
+				outBuffers.at(activeCh).at(j), chSamples, 
+				bit8Buffers ? PICO_INT8_T : PICO_INT16_T, j, 
 				PICO_RATIO_MODE_RAW, action);
 			action = PICO_ADD;
 		}

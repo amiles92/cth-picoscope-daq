@@ -74,7 +74,7 @@ void progressBar(int current, int total, std::string label)
 		std::cout << " - TOTAL: " << total << std::endl;
 		return;
 	}
-	std::cout << label << ": [";
+	std::cout << "### " << label << ": [";
 	const int pos = (int) (barSize * frac);
 	for (int i = 0 ; i < barSize ; i++)
 	{
@@ -174,6 +174,11 @@ float adc2mv(const int16_t value, const int range)
 	return (value / 32512.0f) * VRanges[range];
 }
 
+float adc8Bit2mv(const int8_t value, const int range)
+{
+	return (value / 128.0f) * VRanges[range];
+}
+
 dataHeader readHeader(std::ifstream &f)
 {
 	dataHeader d = {};
@@ -189,7 +194,9 @@ dataHeader readHeader(std::ifstream &f)
 			numActive++;
 	d.numActive = numActive;
 
-	d.activeTriggers = byteBin(f.get()).substr(3);
+	std::string activeTriggers8BitBuffer = byteBin(f.get());
+	d.activeTriggers = activeTriggers8BitBuffer.substr(3);
+	d.bit8Buffer = (activeTriggers8BitBuffer.at(2) == '1');
 	d.auxTriggerThreshold = adc2mv(bytesTwos(f, 2), 6);
 	for (int i0(0); i0 < nCh; ++i0)
 	{
@@ -243,7 +250,7 @@ bool isLittleEndian()
 	return bool(*c);
 }
 
-std::vector<std::vector<std::vector<sample>>> readData(std::ifstream &f, dataHeader &d)
+std::vector<std::vector<std::vector<sample>>> readData16Bit(std::ifstream &f, dataHeader &d)
 {
 	std::vector<std::vector<std::vector<sample>>> data;
 	bool little(isLittleEndian());
@@ -270,7 +277,7 @@ std::vector<std::vector<std::vector<sample>>> readData(std::ifstream &f, dataHea
 		}
 		else
 		{
-			f.read(reinterpret_cast<char *>(chADCData.data()), nWf * nSamples * sizeof(int));
+			f.read(reinterpret_cast<char *>(chADCData.data()), nWf * nSamples * sizeof(int16_t));
 		}
 		std::vector<std::vector<sample>> chData(nWf);
 		for (int i0(0); i0 < nWf; ++i0)
@@ -287,6 +294,43 @@ std::vector<std::vector<std::vector<sample>>> readData(std::ifstream &f, dataHea
 		data.push_back(chData);
 	}
 	return data;
+}
+
+std::vector<std::vector<std::vector<sample>>> readData8Bit(std::ifstream &f, dataHeader &d)
+{
+	std::vector<std::vector<std::vector<sample>>> data;
+	int nWf = d.numWaveforms;
+	double timeBase = pow(2, d.timebase) * 0.2;
+	for (int ch(0); ch < 4; ++ch)
+	{
+		if (d.activeChannels[ch] == '0')
+		{
+			continue;
+		}
+		int nSamples = d.chSamples.at(ch);
+		std::vector<int8_t> chADCData(nWf * nSamples);
+
+		f.read(reinterpret_cast<char *>(chADCData.data()), sizeof(int8_t) * nWf * nSamples);
+		std::vector<std::vector<sample>> chData(nWf);
+		for (int i0(0); i0 < nWf; ++i0)
+		{
+			std::vector<sample> wfChData(nSamples);
+			for (int i1(0); i1 < nSamples; ++i1)
+			{
+				sample newSample{adc8Bit2mv(chADCData.at(i0 * nSamples + i1), d.chVRanges.at(ch)) * (positiveSignals ? -1 : 1), timeBase * i1};
+				wfChData.at(i1) = (newSample);
+				// std::cout << newSample.time << " / " << newSample.voltage << std::endl;
+			}
+			chData.at(i0) = (wfChData);
+		}
+		data.push_back(chData);
+	}
+	return data;
+}
+
+std::vector<std::vector<std::vector<sample>>> readData(std::ifstream &f, dataHeader &d)
+{
+	return (d.bit8Buffer ? readData8Bit(f, d) : readData16Bit(f, d));
 }
 
 int getNumSamples(dataHeader &d)
@@ -863,7 +907,7 @@ individualPeResult individualPeAnalysis(const double* data, const int nWfs,
 	}
 
 	std::vector<int> peaks;
-	std::vector<double> guesses = initialGuesses(hist, peaks); 
+	std::vector<double> guesses;// = initialGuesses(hist, peaks); 
 	// XXX: STILL NOT WORKING PERFECTLY
 
 	hist->Sumw2();
@@ -881,7 +925,7 @@ individualPeResult individualPeAnalysis(const double* data, const int nWfs,
 		if (guesses.size() == 0)
 		{
 			fn->SetParameter(1, 3);
-			fn->SetParameter(4, -75);
+			fn->SetParameter(4, -150);
 		}
 		else
 		{
@@ -893,14 +937,14 @@ individualPeResult individualPeAnalysis(const double* data, const int nWfs,
 		fn->SetParLimits(2, -20, 15);
 		fn->SetParameter(3, 1);
 		fn->SetParLimits(3, 0.1, 25);
-		fn->SetParLimits(4, -100, -30);
+		fn->SetParLimits(4, -300, -30);
 		fn->SetParameter(5, 0.5);
 		fn->SetParLimits(5, 0.1, 8);
 		fn->FixParameter(6, i);
 		fn->SetParameter(7, 500);
 		fn->SetParLimits(7, 50, 2 * nWfs);
-		fn->FixParameter(8, 2); //XXX: temp fix to test peak fitting
-		// fn->SetParLimits(8, 0.1, 12);
+		fn->SetParameter(8, 2); //XXX: temp fix to test peak fitting
+		fn->SetParLimits(8, 0.1, 5);
 		for (int j = 0 ; j < 9 ; j++) fn->SetParError(j, 0);
 
 		TFitResultPtr res = hist->Fit(fn, "SWMQ");
@@ -1451,22 +1495,6 @@ void ledPreAnalysis(std::string directory, std::string date, std::string mppcStr
 
 void preAnalyseFolder(std::string directory, std::string date, std::string outputDirectory)
 {
-
-	// XXX: TO REMOVE OR INCORPORATE IN A BETTER WAY!!!!!!!!
-	for (int i = 500; i < 676; i += 5)
-	{
-		ledFullVec.push_back(std::to_string(i));
-		ledShortVec.push_back(std::to_string(i));
-	}
-	for (int i = 680; i < 726; i += 5)
-	{
-		ledFullVec.push_back(std::to_string(i));
-	}
-	g_dcp.ledFullVec = ledFullVec;
-	g_dcp.ledShortVec = ledShortVec;
-
-	// XXX: END TO REMOVE
-
 	while (directory.back() == '/')
 	{
 		directory.pop_back();
@@ -1624,7 +1652,7 @@ std::vector<std::vector<std::vector<highPeResult>>> gaussFitting(
 	std::vector<std::vector<std::vector<highPeResult>>> gaussFits;
 	for (TTree* t : forest)
 	{
-		if (t == forest.at(3)) continue;
+		// if (t == forest.at(3)) continue;
 		std::vector<std::vector<highPeResult>> chGaussFits;
 		for (std::string bias : dcp.biasFullVec)
 		{

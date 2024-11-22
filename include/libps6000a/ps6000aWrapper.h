@@ -65,9 +65,9 @@ void SetDefaults(UNIT *unit);
 
 void SetVoltages(UNIT *unit, int16_t ranges[4]);
 
-std::vector<std::vector<int16_t*>> SetDataBuffers(UNIT *unit, std::bitset<4> activeChannels, 
+std::vector<std::vector<void*>> SetDataBuffers(UNIT *unit, std::bitset<4> activeChannels, 
 	std::vector<uint16_t> samplesPostPerChannel, int16_t samplesPreTrigger, 
-	uint32_t numWaveforms, uint16_t maxPostSamples);
+	uint32_t numWaveforms, uint16_t maxPostSamples, bool bit8Buffers);
 
 void SetTimebase(UNIT *unit, uint8_t timebase, uint16_t maxChSamples);
 

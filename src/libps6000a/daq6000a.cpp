@@ -33,7 +33,8 @@ public:
     uint16_t maxPostSamples;
     int16_t samplesPreTrigger;
     uint32_t numWaveforms;
-    vector<vector<int16_t*>> dataBuffers;
+    vector<vector<void*>> dataBuffers;
+    bool bit8Buffers; // if true, write out only 8 bits to buffer and file
 
     BOOL dataConfigured = FALSE;
     BOOL unitInitialised = FALSE;
@@ -155,7 +156,7 @@ void setTriggerConfig(dataCollectionConfig &dcc,
 
 void setDataConfig(dataCollectionConfig &dcc, uint8_t timebase,
     uint32_t numWaveforms, int16_t samplesPreTrigger, uint16_t chAWfSamples,
-    uint16_t chBWfSamples , uint16_t chCWfSamples , uint16_t chDWfSamples)
+    uint16_t chBWfSamples , uint16_t chCWfSamples , uint16_t chDWfSamples, bool bit8Buffers)
 {
     dcc.timebase = timebase;
     dcc.numWaveforms = numWaveforms;
@@ -172,8 +173,10 @@ void setDataConfig(dataCollectionConfig &dcc, uint8_t timebase,
         SetDaqDelay(&dcc.unit, dcc.samplesPreTrigger);
     }
 
+    dcc.bit8Buffers = bit8Buffers;
+
     dcc.dataBuffers = SetDataBuffers(&dcc.unit, dcc.activeChannels, dcc.chPostSamplesPerWaveform, 
-            dcc.samplesPreTrigger, dcc.numWaveforms, dcc.maxPostSamples);
+            dcc.samplesPreTrigger, dcc.numWaveforms, dcc.maxPostSamples, bit8Buffers);
 
     return;
 }
@@ -193,7 +196,7 @@ void resetDataBuffers(dataCollectionConfig &dcc)
 {
     freeDataBuffers(dcc);
     dcc.dataBuffers = SetDataBuffers(&dcc.unit, dcc.activeChannels, dcc.chPostSamplesPerWaveform, 
-            dcc.samplesPreTrigger, dcc.numWaveforms, dcc.maxPostSamples);
+            dcc.samplesPreTrigger, dcc.numWaveforms, dcc.maxPostSamples, dcc.bit8Buffers);
 }
 
 void collectRapidBlockData(dataCollectionConfig &dcc)
@@ -352,8 +355,10 @@ void writeDataHeader(dataCollectionConfig &dcc, ofstream &of)
                                 (uint8_t) dcc.activeChannels.to_ullong();
     of.write((const char *) &timebaseActiveCh, sizeof(uint8_t));
 
-    uint8_t activeTriggers = (uint8_t) dcc.activeTriggers.to_ullong();
-    of.write((const char *) &activeTriggers, sizeof(uint8_t));
+
+    uint8_t bufferSizeActiveTriggers =  (uint8_t) dcc.bit8Buffers << 5 |
+                                        (uint8_t) dcc.activeTriggers.to_ullong();
+    of.write((const char *) &bufferSizeActiveTriggers, sizeof(uint8_t));
 
     bitset_reverse(dcc.activeChannels);
     bitset_reverse(dcc.activeTriggers);
@@ -407,7 +412,7 @@ void writeDataOut(dataCollectionConfig &dcc, ofstream &of)
                                         dcc.chPostSamplesPerWaveform.end());
     
     int16_t o16;
-    uint32_t s = sizeof(int16_t);
+    uint32_t s = dcc.bit8Buffers ? sizeof(int8_t) : sizeof(int16_t);
 
     for (int i = 0; i < dcc.activeChannels.count(); i++)
     {
@@ -415,10 +420,18 @@ void writeDataOut(dataCollectionConfig &dcc, ofstream &of)
                            + dcc.samplesPreTrigger);
         for (int j = 0; j < dcc.numWaveforms; j++)
         {
-            for (int k = 0; k < nSamples; k++)
+            if (dcc.bit8Buffers)
             {
-                o16 = bswap16((dcc.dataBuffers.at(i).at(j))[k]);
-                of.write((const char*) &o16, s);
+                of.write((const char*) dcc.dataBuffers.at(i).at(j), s * nSamples);
+            }
+            else
+            {
+                for (int k = 0; k < nSamples; k++)
+                {
+                    int16_t* p = (int16_t*) dcc.dataBuffers.at(i).at(j);
+                    o16 = bswap16(p[k]);
+                    of.write((const char*) &o16, s);
+                }
             }
         }
     }
@@ -468,7 +481,7 @@ int seriesSetDaqSettings(
         setTriggerConfig(g_dcc, chATrigger, chBTrigger, chCTrigger, chDTrigger, auxTrigger);
         printf("Trigger channels set\n");
         setDataConfig(g_dcc, timebase, numWaveforms, samplesPreTrigger, 
-                chAWfSamples, chBWfSamples, chCWfSamples, chDWfSamples);
+                chAWfSamples, chBWfSamples, chCWfSamples, chDWfSamples, true);
         printf("All settings configured\n\n");
         g_dcc.dataConfigured = TRUE;
         printf("Data settings updated\n");
@@ -579,7 +592,7 @@ int multiSeriesSetDaqSettings(
             setTriggerConfig(g_vecDcc.at(i), chATrigger, chBTrigger, chCTrigger, chDTrigger, auxTrigger);
             printf("%s: Trigger channel(s) configured\n", g_vecDcc.at(i).serial);
             setDataConfig(g_vecDcc.at(i), timebase, numWaveforms, samplesPreTrigger, 
-                    chAWfSamples, chBWfSamples, chCWfSamples, chDWfSamples);
+                    chAWfSamples, chBWfSamples, chCWfSamples, chDWfSamples, true);
             g_vecDcc.at(i).dataConfigured = TRUE;
             printf("%s: Settings configured\n\n", g_vecDcc.at(i).serial);
 
@@ -689,7 +702,7 @@ int runFullDAQ(char *outputFileBasename,
         setActiveChannels(dcc, chAVRange, chBVRange, chCVRange, chDVRange);
         setTriggerConfig(dcc, chATrigger, chBTrigger, chCTrigger, chDTrigger, auxTrigger);
         setDataConfig(dcc, timebase, numWaveforms, samplesPreTrigger, 
-                    chAWfSamples, chBWfSamples, chCWfSamples, chDWfSamples);
+                    chAWfSamples, chBWfSamples, chCWfSamples, chDWfSamples, true);
 
         collectRapidBlockData(dcc);
 

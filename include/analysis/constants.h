@@ -110,6 +110,7 @@ struct dataHeader
 	std::string activeChannels;
 	uint8_t numActive;
 	std::string activeTriggers;
+	bool bit8Buffer;
 	float auxTriggerThreshold;
 	std::vector<float> chTriggerThreshold;
 	std::vector<uint8_t> chVRanges;
@@ -226,21 +227,25 @@ const int g_jstOffset = 32400; // 9 hours in seconds
 ///                            Common Parameters                            ///
 ///////////////////////////////////////////////////////////////////////////////
 
-const std::vector<std::string> biasFullVec{"78", "78.5", "79", "79.5", "80", "82", "82.5", "83"};
-// const std::vector<std::string> ledFullVec{"820", "840", "850", "880", "890", "900"};
-const std::vector<std::string> biasShortVec{"80.5", "81", "81.5"};
-// const std::vector<std::string> ledShortVec{"840", "880", "900"};
-const std::string g_pmt("1.4kV");
+const std::string g_pmt("0kV");
 const std::vector<std::string> picoscopeNames{"IW098-0028", "IW114-0004"};
 
+// const std::vector<std::string> biasFullVec{"78", "78.5", "79", "79.5", "80", "80.5", "81", "81.5", "82", "82.5", "83"};
+const std::vector<std::string> biasFullVec{"81"}; const std::vector<std::string> ledShortVec{"540"};
+const std::vector<std::string> ledFullVec{};
+const std::vector<std::string> biasShortVec{};
+// const std::vector<std::string> ledShortVec{"525", "540", "545", "565", "575", "585", "600", "610", "620", "630"};
+
 // TEMP
+// const std::vector<std::string> biasFullVec{"78", "78.5", "79", "79.5", "80", "82", "82.5", "83"};
+// const std::vector<std::string> ledFullVec{"820", "840", "850", "880", "890", "900"};
+// const std::vector<std::string> biasShortVec{"80.5", "81", "81.5"};
+// const std::vector<std::string> ledShortVec{"840", "880", "900"};
+
 // const std::vector<std::string> biasFullVec{"78", "78.5", "79", "79.5", "80", "80.5", "81", "81.5", "82", "82.5", "83"};
 // const std::vector<std::string> ledFullVec{};
 // const std::vector<std::string> biasShortVec{};
 // const std::vector<std::string> ledShortVec{"805", "810", "820", "840", "870", "890"};
-
-std::vector<std::string> ledShortVec;
-std::vector<std::string> ledFullVec;
 // TEMP
 
 dataCollectionParameters g_dcp{biasFullVec, ledFullVec, biasShortVec, ledShortVec};
@@ -286,7 +291,7 @@ const std::vector<std::vector<std::string>> titles{{"First 100 waveforms for ch"
 // XXX: g_saveAllPlots unimplemented so far
 const bool g_saveAllPlots = true; // save all produced hists to chonky pdf, recommend leave off unless debugging
 const int g_highPeCutoff = 545; // LED values equal or below are treated as individual PE,  above is high PE
-const int g_nBins = 250;
+const int g_nBins = 500;
 const std::string g_pePlotLedV = "540";
 
 const int g_threads = 4;
