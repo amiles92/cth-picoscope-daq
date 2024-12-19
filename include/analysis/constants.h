@@ -227,14 +227,13 @@ const int g_jstOffset = 32400; // 9 hours in seconds
 ///                            Common Parameters                            ///
 ///////////////////////////////////////////////////////////////////////////////
 
-const std::string g_pmt("0kV");
+const std::string g_pmt("1.4kV");
 const std::vector<std::string> picoscopeNames{"IW098-0028", "IW114-0004"};
 
-// const std::vector<std::string> biasFullVec{"78", "78.5", "79", "79.5", "80", "80.5", "81", "81.5", "82", "82.5", "83"};
-const std::vector<std::string> biasFullVec{"81"}; const std::vector<std::string> ledShortVec{"540"};
+const std::vector<std::string> biasFullVec{"78", "78.5", "79", "79.5", "80", "80.5", "81", "81.5", "82", "82.5", "83"};
 const std::vector<std::string> ledFullVec{};
 const std::vector<std::string> biasShortVec{};
-// const std::vector<std::string> ledShortVec{"525", "540", "545", "565", "575", "585", "600", "610", "620", "630"};
+const std::vector<std::string> ledShortVec{"525", "540", "545", "565", "575", "585", "600", "610", "620", "630"};
 
 // TEMP
 // const std::vector<std::string> biasFullVec{"78", "78.5", "79", "79.5", "80", "82", "82.5", "83"};

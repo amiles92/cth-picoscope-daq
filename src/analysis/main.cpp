@@ -861,7 +861,7 @@ std::vector<int> findPeaks(TH1D* hist)
 	}
 
 	std::vector<int> peaks = findLocalMaxima(data, 50);
-	peaks = findSeparateMaxima(data, positions, peaks, 30);
+	// peaks = findSeparateMaxima(data, positions, peaks, 30);
 	peaks = findProminentMaxima(data, peaks, 200);
 	return peaks;
 }
@@ -1164,10 +1164,51 @@ environmentSample getSampleInterp(std::vector<environmentSample> envData, int32_
 ///                            Saving functions                             ///
 ///////////////////////////////////////////////////////////////////////////////
 
+void drawPlotWithResiduals(TCanvas *c, TGraphErrors *gr, TF1* f,
+		std::string xLabel, std::string outputFile)
+{
+	c->SetBottomMargin(0.31);
+	gr->Draw("ap");
+	
+	TPad* pad = new TPad("pad", "pad", 0., 0., 1., 1.);
+	pad->SetTopMargin(0.7);
+	pad->Draw();
+	pad->SetFillStyle(0);
+	pad->cd();
+
+	TLine* l = new TLine(f->GetXmin(), 0, f->GetXmax(), 0);
+	l->SetLineColor(kRed);
+	l->SetLineWidth(2);
+
+	TGraphErrors* residual = new TGraphErrors(gr->GetN());
+	for(int i = 0 ; i < gr->GetN() ; i++){
+		double x = gr->GetPointX(i);
+		double y = (gr->GetPointY(i) - f->Eval(x)) / gr->GetErrorY(i);
+		residual->SetPoint(i, x, y);
+		residual->SetPointError(i, 0, 1);
+	}
+
+	residual->SetTitle("");
+	residual->SetLineColor(1);
+	residual->SetMarkerColor(1);
+	residual->SetMarkerSize(0.75);
+	residual->SetMarkerStyle(8);
+	residual->SetFillColor(1);
+	residual->GetXaxis()->SetTitle(xLabel.c_str());
+	residual->GetHistogram()->SetMinimum(-6);
+	residual->GetHistogram()->SetMaximum(6);
+	residual->GetYaxis()->SetNdivisions(-6, "I");
+	residual->GetYaxis()->SetTitle("#splitline{Standardized}{Residuals}");
+	residual->Draw("ap");
+	l->Draw("same");
+	pad->Modified();
+	pad->Update();
+}
+
 TFitResultPtr saveGraph(std::string outputFile, std::string title, 
 		std::vector<double> &x, std::vector<double> &y,
-		std::string xLabel, std::string yLabel,
-		std::vector<double> &uX, std::vector<double> &uY, bool linFit)
+		std::string xLabel, std::string yLabel, std::vector<double> &uX, 
+		std::vector<double> &uY, bool linFit, bool residuals)
 {
 	std::cout << "### Creating multi-graph: " << title << std::endl;
 	if (x.size() != y.size()
@@ -1200,17 +1241,31 @@ TFitResultPtr saveGraph(std::string outputFile, std::string title,
 	gr->SetMarkerSize(0.75);
 	gr->SetMarkerStyle(8);
 	gr->SetFillColor(1);
-	gr->GetXaxis()->SetTitle(xLabel.c_str());
 	gr->GetYaxis()->SetTitle(yLabel.c_str());
+	// gr->GetYaxis()->SetRangeUser(250e3, 1300e3);
 	gr->SetTitle(title.c_str());
 
-	gStyle->SetOptFit(11);
+	gStyle->SetOptFit(0);
 
 	TFitResultPtr res;
+	TF1* f;
 
-	if (linFit) res = gr->Fit("pol1", "QS");
+	if (linFit) 
+	{
+		f = new TF1("argh", "pol1", *std::min_element(x.begin(), x.end()), *std::max_element(x.begin(), x.end()));
+		res = gr->Fit(f, "QS");
+	}
 
-	gr->Draw("AP");
+	if (residuals && linFit)
+	{
+		drawPlotWithResiduals(c, gr, f, xLabel, outputFile);
+		gr->GetXaxis()->SetTitle(xLabel.c_str());
+	}
+	else
+	{
+		gr->Draw("AP");
+	}
+
 	c->Modified();
 	c->Update();
 	c->SaveAs(outputFile.c_str());
@@ -1224,7 +1279,7 @@ TFitResultPtr saveGraph(std::string outputFile, std::string title,
 {
 	std::vector<double> uX;
 	std::vector<double> uY;
-	return saveGraph(outputFile, title, x, y, xLabel, yLabel, uX, uY, linFit);
+	return saveGraph(outputFile, title, x, y, xLabel, yLabel, uX, uY, linFit, false);
 }
 
 void saveMultiGraph(std::string outputFile, std::string title,
@@ -1270,8 +1325,9 @@ void saveMultiGraph(std::string outputFile, std::string title,
 	TMultiGraph *mg = new TMultiGraph("mg", title.c_str());
 	if (leg == NULL && labels.size() > 0)
 	{
-		leg = new TLegend(0.13, 0.48, 0.23, 0.88);
-		leg->SetFillStyle(0);
+		leg = new TLegend(0.77, 0.3, 0.87, 0.88);
+		// leg = new TLegend(0.13, 0.3, 0.23, 0.88);
+		// leg->SetFillStyle(0);
 		deleteLeg = true;
 	}
 
@@ -1283,12 +1339,16 @@ void saveMultiGraph(std::string outputFile, std::string title,
 		double* uY = uYArr.size() ? uYArr.at(i).data() : NULL;
 
 		TGraphErrors *gr = new TGraphErrors(x.size(), x.data(), y.data(), uX, uY);
+		gr->Fit("pol1");
+		TF1 *f = (TF1*) gr->GetListOfFunctions()->FindObject("pol1");
+		if (f) f->SetLineColor(i + 1);
 		gr->SetLineColor(i + 1);
+		gr->SetLineStyle(7);
 		gr->SetMarkerColor(i + 1);
-		gr->SetMarkerSize(0.75);
+		gr->SetMarkerSize(0.6);
 		gr->SetMarkerStyle(8);
 		gr->SetFillColor(i + 1);
-		mg->Add(gr, "PL");
+		mg->Add(gr, "P");
 		if (labels.size() > 0)
 		{
 			leg->AddEntry(gr, labels.at(i).c_str(), "lp");
@@ -1642,7 +1702,7 @@ std::vector<std::vector<std::vector<highPeResult>>> gaussFitting(
 		dataCollectionParameters &dcp, std::vector<TTree*> forest,
 		std::vector<std::string> pico)
 {
-	int numFits = (forest.size() - 1) * (dcp.biasFullVec.size() * dcp.ledShortVec.size()
+	int numFits = (forest.size()) * (dcp.biasFullVec.size() * dcp.ledShortVec.size()
 				  				 + dcp.biasShortVec.size() * dcp.ledFullVec.size());
 	int current = 0;
 	progressBar(current, numFits, "Gaussian Fitting");
@@ -1887,8 +1947,9 @@ fileResults genericAnalysis(std::string filePath, std::string outputDir, bool fi
 
 	std::vector<TTree*> forest = {treeBack, treeMiddle, treeFront, treePmt};
 
-	std::vector<std::string> allBias(*biasFullVec);
-	allBias.insert(allBias.end(), biasShortVec->begin(), biasShortVec->end());
+	std::vector<std::string> allBias;
+	for (std::string s : *biasFullVec) allBias.push_back(s + "V");
+	for (std::string s : *biasShortVec) allBias.push_back(s + "V");
 	
 	std::vector<double> allBiasDouble;
 	for (std::string bias : allBias) allBiasDouble.push_back(std::stod(bias));
@@ -2002,8 +2063,11 @@ fileResults genericAnalysis(std::string filePath, std::string outputDir, bool fi
 		std::vector<std::vector<individualPeResult>> chPoiss = poissFits.at(i);
 
 		std::vector<std::vector<double>> mppcArr;
+		std::vector<std::vector<double>> uMppcArr;
 		std::vector<std::vector<double>> mppcPeArr;
+		std::vector<std::vector<double>> uMppcPeArr;
 		std::vector<double> peSepVec;
+		std::vector<double> uPeSepVec;
 
 		for (int j = 0 ; j < (int) chGauss.size() ; j++)
 		{
@@ -2011,21 +2075,32 @@ fileResults genericAnalysis(std::string filePath, std::string outputDir, bool fi
 			std::vector<highPeResult> biasGauss = chGauss.at(j);
 			std::vector<individualPeResult> biasPoiss = chPoiss.at(j);
 			std::vector<double> mppc; // mean mppc [mV ns]
-			std::vector<double> mppcPe; // mean mppc [PE]
+			std::vector<double> uMppc; // mean mppc [PE]
+			std::vector<double> mppcPe; // mean mppc [mV ns]
+			std::vector<double> uMppcPe; // mean mppc [PE]
 
 			int ledIndex = getIndex((j < (int) biasFullVec->size()) 
 					? *ledShortVec : *ledFullVec, g_pePlotLedV);
 			
 			double peSep = biasPoiss.at(ledIndex).pePeakSeparation;
+			double uPeSep = biasPoiss.at(ledIndex).uPePeakSeparation;
 			peSepVec.push_back(peSep * -1);
+			uPeSepVec.push_back(uPeSep);
 
 			for (int k = 0 ; k < (int) biasGauss.size() ; k++)
 			{
 				mppc.push_back(biasGauss.at(k).mean * -1);
+				uMppc.push_back(biasGauss.at(k).uMean);
 				mppcPe.push_back(biasGauss.at(k).mean / peSep);
+				uMppcPe.push_back(sqrt(
+					square(biasGauss.at(k).uMean / peSep) +
+					square(uPeSep * biasGauss.at(k).mean / square(peSep))
+				));
 			}
 			mppcArr.push_back(mppc);
+			uMppcArr.push_back(uMppc);
 			mppcPeArr.push_back(mppcPe);
+			uMppcPeArr.push_back(uMppcPe);
 		}
 
 		saveMultiGraph(pdfFile, title, pmtArr, mppcArr, pmtLabel, mppcLabel, allBias);
@@ -2036,13 +2111,15 @@ fileResults genericAnalysis(std::string filePath, std::string outputDir, bool fi
 		saveMultiGraph(pdfFile, title, ledArr, mppcPeArr, ledLabel, mppcPeLabel, allBias);
 		saveMultiGraph(pdfFile, title + " Log Y Scale", ledArr, mppcArr, ledLabel, mppcLabel, allBias, cLogY);
 		saveMultiGraph(pdfFile, title + " Log Y Scale", ledArr, mppcPeArr, ledLabel, mppcPeLabel, allBias, cLogY);
-		TFitResultPtr res = saveGraph(pdfFile, titlePe, allBiasDouble, peSepVec, biasLabel, peLabel, true);
+		TFitResultPtr res = saveGraph(pdfFile, titlePe, allBiasDouble, peSepVec, biasLabel, peLabel, emptyVec, uPeSepVec, true, true);
 		double vBr = -1 * res->Parameter(0) / res->Parameter(1);
-		std::cout << vBr << std::endl;
+		double uVBr = sqrt(square(res->ParError(0) / res->Parameter(1)) + square(res->ParError(1) * res->Parameter(0) / square(res->Parameter(1))));
 		
 		std::vector<double> gainVec1;
 		std::vector<double> gainVec2;
+		std::vector<double> uGainVec2;
 		std::vector<double> gainRatioVec;
+		std::vector<double> uGainRatioVec;
 		std::vector<double> allOverV;
 		for (int j = 0 ; j < (int) allBiasDouble.size() ; j++)
 		{
@@ -2052,14 +2129,21 @@ fileResults genericAnalysis(std::string filePath, std::string outputDir, bool fi
 					/ (g_elementaryCharge * g_pixelsPerCh)); // shouldn't be here: g_ampGain * g_splitter * 
 			gainVec2.push_back(peSepVec.at(j) * 1e-12
 					/ (50 * g_ampGain * g_splitter * g_elementaryCharge));
+			uGainVec2.push_back(uPeSepVec.at(j) * 1e-12
+					/ (50 * g_ampGain * g_splitter * g_elementaryCharge));
 			gainRatioVec.push_back(peSepVec.at(j) * 1e-12 * g_pixelsPerCh
+					/ (g_terminalCap * overV * 50 * g_ampGain * g_splitter));
+			uGainRatioVec.push_back(uPeSepVec.at(j) * 1e-12 * g_pixelsPerCh
 					/ (g_terminalCap * overV * 50 * g_ampGain * g_splitter));
 		}
 		saveGraph(pdfFile, titleGain1, allBiasDouble, gainVec1, biasLabel, gainLabel, true);
 		saveGraph(pdfFile, titleGain1, allOverV, gainVec1, overLabel, gainLabel, true);
-		saveGraph(pdfFile, titleGain2, allBiasDouble, gainVec2, biasLabel, gainLabel, true);
-		saveGraph(pdfFile, titleGain2, allOverV, gainVec2, overLabel, gainLabel, true);
-		saveGraph(pdfFile, titleGainRatio, allOverV, gainRatioVec, overLabel, gainLabel, true);
+		TFitResultPtr res2 = saveGraph(pdfFile, titleGain2, allBiasDouble, gainVec2, biasLabel, gainLabel, emptyVec, uGainVec2, true, true);
+		std::cout << "###### Breakdown voltage: " << vBr << " +- " << uVBr << std::endl;
+		std::cout << "###### Y-Intercept: " << res2->Parameter(0) << " +- " << res2->ParError(0) << std::endl;
+		std::cout << "###### Gradient: " << res2->Parameter(1) << " +- " << res2->ParError(1) << std::endl;
+		saveGraph(pdfFile, titleGain2, allOverV, gainVec2, overLabel, gainLabel, emptyVec, uGainVec2, true, true);
+		saveGraph(pdfFile, titleGainRatio, allOverV, gainRatioVec, overLabel, gainLabel, emptyVec, uGainRatioVec, true, true);
 	}
 	Ctmp->SaveAs((pdfFile + "]").c_str());
 	// std::cout << g_maxPeaks << std::endl;
@@ -2308,8 +2392,12 @@ void reproducibilityAnalysis(std::string outputDir, std::vector<std::string> dat
 		exit(1);
 	}
 
+	const int skipIndices = 3;
+
 	std::vector<fileResults> resVec;
 	std::vector<std::string> fileEndings;
+	std::vector<double> emptyVec;
+	std::vector<std::vector<double>> emptyArr;
 
 	for (std::string data : dataFiles)
 	{
@@ -2336,6 +2424,7 @@ void reproducibilityAnalysis(std::string outputDir, std::vector<std::string> dat
 	std::string mppcAxis = "MPPC Signal Ratio";
 
 	std::vector<std::vector<double>> refPmtArr;
+	std::vector<std::vector<highPeResult>> refPmtResArr = r0.gaussFits.at(3);
 	for (int j = 0 ; j < (int) r0.gaussFits.at(3).size() ; j++)
 	{
 		std::vector<highPeResult> pmtGauss = r0.gaussFits.at(3).at(j);
@@ -2362,18 +2451,23 @@ void reproducibilityAnalysis(std::string outputDir, std::vector<std::string> dat
 	{
 		std::string mppcN = r0.mppcNumbers.at(i);
 
+		std::vector<std::vector<highPeResult>> refMppcResArr = r0.gaussFits.at(i);
 		std::vector<std::vector<double>> refMppcArr;
+		std::vector<std::vector<double>> uRefMppcArr;
 
 		for (int j = 0 ; j < (int) r0.gaussFits.at(i).size() ; j++)
 		{
 			std::vector<highPeResult> mppcGauss = r0.gaussFits.at(i).at(j);
 			std::vector<double> refMppc;
+			std::vector<double> uRefMppc;
 
 			for (int k = 0 ; k < (int) mppcGauss.size() ; k++)
 			{
 				refMppc.push_back(mppcGauss.at(k).mean * -1);
+				uRefMppc.push_back(mppcGauss.at(k).uMean);
 			}
 			refMppcArr.push_back(refMppc);
+			uRefMppcArr.push_back(uRefMppc);
 		}
 
 		for (int j = 1 ; j < (int) resVec.size() ; j++)
@@ -2384,23 +2478,71 @@ void reproducibilityAnalysis(std::string outputDir, std::vector<std::string> dat
 					+ " Reproducibility";
 
 			std::vector<std::vector<double>> mppcArr;
+			std::vector<std::vector<double>> uMppcArr;
+			std::vector<std::vector<double>> refPmtArr2;
+			std::vector<std::vector<double>> uRefPmtArr2;
 			std::vector<std::vector<highPeResult>> chGauss = res.gaussFits.at(i);
 			std::vector<std::vector<highPeResult>> chPmt = res.gaussFits.at(3);
+
+			const int n = chGauss.at(0).size() - skipIndices;
+			std::vector<double> totMppc(n, 0);
+			std::vector<double> totMppcSq(n, 0);
+			std::vector<double> totPmt(n, 0);
+
+			std::vector<double> aveMppc(n, 0);
+			std::vector<double> uAveMppc(n, 0);
+			std::vector<double> avePmt(n, 0);
 
 			for (int k = 0 ; k < (int) chGauss.size() ; k++)
 			{
 				std::vector<highPeResult> biasGauss = chGauss.at(k);
 				std::vector<highPeResult> biasPmt = chPmt.at(k);
 				std::vector<double> mppc;
+				std::vector<double> uMppc;
+				std::vector<double> refPmt2;
+				std::vector<double> uRefPmt2;
 
-				for (int l = 0 ; l < (int) biasGauss.size() ; l++)
+				for (int l = skipIndices ; l < (int) biasGauss.size() ; l++)
 				{
-					mppc.push_back(biasGauss.at(l).mean / refMppcArr.at(k).at(l)
-							* (biasPmt.at(l).mean / refPmtArr.at(k).at(l)));
+					double ab = biasGauss.at(l).mean * biasPmt.at(l).mean;
+					double cd = refMppcResArr.at(k).at(l).mean * refPmtResArr.at(k).at(l).mean;
+					mppc.push_back(ab / cd);
+
+					totMppc.at(l - skipIndices) += ab / cd;
+					// totMppcSq.at(l - skipIndices) += square(ab / cd);
+					totPmt.at(l - skipIndices) += refPmtResArr.at(k).at(l).mean * -1;
+
+					double variance = (
+						square(biasGauss.at(l).uMean * biasPmt.at(l).mean) +
+						square(biasPmt.at(l).uMean * biasGauss.at(l).mean) +
+						square(refMppcResArr.at(k).at(l).uMean * ab / refMppcResArr.at(k).at(l).mean) +
+						square(refPmtResArr.at(k).at(l).uMean * ab / refPmtResArr.at(k).at(l).mean)
+						) / square(cd);
+
+					uMppc.push_back(sqrt(variance));
+
+					totMppcSq.at(l - skipIndices) += variance;
+
+					refPmt2.push_back(refPmtResArr.at(k).at(l).mean * -1);
+					uRefPmt2.push_back(refPmtResArr.at(k).at(l).uMean);
 				}
 				mppcArr.push_back(mppc);
+				uMppcArr.push_back(uMppc);
+				refPmtArr2.push_back(refPmt2);
+				uRefPmtArr2.push_back(uRefPmt2);
 			}
-			saveMultiGraph(pdfFile, title, refPmtArr, mppcArr, pmtAxis, mppcAxis, allBias);
+			saveMultiGraph(pdfFile, title, refPmtArr2, mppcArr, pmtAxis, mppcAxis, allBias, uRefPmtArr2, uMppcArr);
+
+			for (int k = 0 ; k < n ; k++)
+			{
+				// std::cout << "totpmt: " << totPmt.at(k) << " - totratio: " << totMppc.at(k) << " - totratioSq: " << totMppcSq.at(k) << std::endl;
+				aveMppc.at(k) = totMppc.at(k) / n;
+				uAveMppc.at(k) = sqrt(totMppcSq.at(k));
+				avePmt.at(k) = totPmt.at(k) / n;
+				// std::cout << "pmt: " << avePmt.at(k) << " - ratio: " << aveMppc.at(k) << " +- " << uAveMppc.at(k) << std::endl;
+			}
+
+			saveGraph(pdfFile, title, avePmt, aveMppc, pmtAxis, mppcAxis, emptyVec, uAveMppc, true, true);
 		}
 	}
 	Ctmp->SaveAs((pdfFile + "]").c_str());
@@ -2429,7 +2571,7 @@ void reproducibilityAnalysis(std::string outputDir, std::vector<std::string> dat
 
 int main(int argc, char **argv)
 {
-	ROOT::EnableImplicitMT(2);
+	ROOT::EnableImplicitMT(g_threads);
 	col->SetRGB(0.5,0.5,0.5);
 	gErrorIgnoreLevel = 1001;
 	if (argc < 2)
