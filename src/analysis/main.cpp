@@ -1325,8 +1325,8 @@ void saveMultiGraph(std::string outputFile, std::string title,
 	TMultiGraph *mg = new TMultiGraph("mg", title.c_str());
 	if (leg == NULL && labels.size() > 0)
 	{
-		leg = new TLegend(0.77, 0.3, 0.87, 0.88);
-		// leg = new TLegend(0.13, 0.3, 0.23, 0.88);
+		// leg = new TLegend(0.77, 0.3, 0.87, 0.88);
+		leg = new TLegend(0.13, 0.3, 0.23, 0.88);
 		// leg->SetFillStyle(0);
 		deleteLeg = true;
 	}
@@ -1339,11 +1339,19 @@ void saveMultiGraph(std::string outputFile, std::string title,
 		double* uY = uYArr.size() ? uYArr.at(i).data() : NULL;
 
 		TGraphErrors *gr = new TGraphErrors(x.size(), x.data(), y.data(), uX, uY);
-		gr->Fit("pol1");
+		gr->Fit("pol1","Q");
 		TF1 *f = (TF1*) gr->GetListOfFunctions()->FindObject("pol1");
-		if (f) f->SetLineColor(i + 1);
+		if (f) 
+		{
+			f->SetLineColor(i + 1);
+			// f->SetLineStyle(7);
+			f->SetLineWidth(1);
+		}
+		else
+		{
+			gr->SetLineStyle(7);
+		}
 		gr->SetLineColor(i + 1);
-		gr->SetLineStyle(7);
 		gr->SetMarkerColor(i + 1);
 		gr->SetMarkerSize(0.6);
 		gr->SetMarkerStyle(8);
@@ -1356,6 +1364,7 @@ void saveMultiGraph(std::string outputFile, std::string title,
 	}
 	mg->GetXaxis()->SetTitle(xLabel.c_str());
 	mg->GetYaxis()->SetTitle(yLabel.c_str());
+	mg->GetYaxis()->SetTitleOffset(1.5);
 	mg->Draw("ALP");
 	if (labels.size() > 0)
 	{
@@ -2090,10 +2099,10 @@ fileResults genericAnalysis(std::string filePath, std::string outputDir, bool fi
 			for (int k = 0 ; k < (int) biasGauss.size() ; k++)
 			{
 				mppc.push_back(biasGauss.at(k).mean * -1);
-				uMppc.push_back(biasGauss.at(k).uMean);
+				uMppc.push_back(biasGauss.at(k).sigma);
 				mppcPe.push_back(biasGauss.at(k).mean / peSep);
 				uMppcPe.push_back(sqrt(
-					square(biasGauss.at(k).uMean / peSep) +
+					square(biasGauss.at(k).sigma / peSep) +
 					square(uPeSep * biasGauss.at(k).mean / square(peSep))
 				));
 			}
@@ -2103,8 +2112,8 @@ fileResults genericAnalysis(std::string filePath, std::string outputDir, bool fi
 			uMppcPeArr.push_back(uMppcPe);
 		}
 
-		saveMultiGraph(pdfFile, title, pmtArr, mppcArr, pmtLabel, mppcLabel, allBias);
-		saveMultiGraph(pdfFile, title, pmtArr, mppcPeArr, pmtLabel, mppcPeLabel, allBias);
+		saveMultiGraph(pdfFile, title, pmtArr, mppcArr, pmtLabel, mppcLabel, allBias, uPmtArr, uMppcArr);
+		saveMultiGraph(pdfFile, title, pmtArr, mppcPeArr, pmtLabel, mppcPeLabel, allBias, uPmtArr, uMppcPeArr);
 		saveMultiGraph(pdfFile, title + " Log XY Scale", pmtArr, mppcArr, pmtLabel, mppcLabel, allBias, cLogXY);
 		saveMultiGraph(pdfFile, title + " Log XY Scale", pmtArr, mppcPeArr, pmtLabel, mppcPeLabel, allBias, cLogXY);
 		saveMultiGraph(pdfFile, title, ledArr, mppcArr, ledLabel, mppcLabel, allBias);
@@ -2380,7 +2389,7 @@ void tempAnalysis(std::string outputDir, std::string envDataFile,
 	return;
 }
 
-void reproducibilityAnalysis(std::string outputDir, std::vector<std::string> dataFiles)
+void reproducibilityAnalysis_old(std::string outputDir, std::vector<std::string> dataFiles)
 {
 	// Designed to work for any number of data files, will compare the signal
 	// intensity of each channel to the other files. Similar to channel dependence
@@ -2544,6 +2553,134 @@ void reproducibilityAnalysis(std::string outputDir, std::vector<std::string> dat
 
 			saveGraph(pdfFile, title, avePmt, aveMppc, pmtAxis, mppcAxis, emptyVec, uAveMppc, true, true);
 		}
+	}
+	Ctmp->SaveAs((pdfFile + "]").c_str());
+}
+
+void reproducibilityAnalysis(std::string outputDir, std::vector<std::string> dataFiles)
+{
+	// Designed to work for any number of data files, will compare the signal
+	// intensity of each channel to the other files. Similar to channel dependence
+	// but for same channels
+
+	if (dataFiles.size() < 2)
+	{
+		std::cout << "ERROR: Can't measure reproducibility with one data file" << std::endl;
+		exit(1);
+	}
+
+	// const int skipIndices = 3;
+
+	std::vector<fileResults> resVec;
+	std::vector<std::string> fileEndings;
+	std::vector<double> emptyVec;
+	std::vector<std::vector<double>> emptyArr;
+
+	for (std::string data : dataFiles)
+	{
+		fileResults fr = genericAnalysis(data, outputDir, false);
+		resVec.push_back(fr);
+
+		std::string basename = data.substr(data.find_last_of("/") + 1);
+		if (basename.find('_') != std::string::npos)
+		{
+			fileEndings.push_back(basename.substr(0, basename.find_first_of('.')));
+		}
+		else
+		{
+			fileEndings.push_back("");
+		}
+	}
+	gStyle->SetOptFit(0);
+
+	std::vector<std::string> mppcNumbers = resVec.at(0).mppcNumbers;
+	std::vector<std::string> allBias(resVec.at(0).dcp.biasFullVec);
+	allBias.insert(allBias.end(), resVec.at(0).dcp.biasShortVec.begin(),
+								  resVec.at(0).dcp.biasShortVec.end());
+
+	std::string pmtAxis = "PMT Signal [mV ns]";
+	std::string mppcAxis = "MPPC Signal [mV ns]";
+	// std::string mppcPeAxis = "MPPC Signal [PE]";
+
+	while (outputDir.back() == '/')
+	{
+		outputDir.pop_back();
+	}
+	std::string pdfFile = outputDir + "/" + 
+			combineComponents("-", mppcNumbers) + "_Reproducibility.pdf";
+
+	TCanvas* Ctmp = new TCanvas("ctmp");
+	Ctmp->SaveAs((pdfFile + "[").c_str());
+
+	for (int i = 0 ; i < 3 ; i++)
+	{
+		std::string mppcN = mppcNumbers.at(i);
+
+		std::vector<std::vector<double>> mppcArr;
+		std::vector<std::vector<double>> uMppcArr;
+		std::vector<std::vector<double>> pmtArr;
+		std::vector<std::vector<double>> uPmtArr;
+
+		std::string title = "MPPC " + mppcN + " Reproducibility";
+
+		for (int j = 0 ; j < (int) resVec.size() ; j++)
+		{
+			fileResults res = resVec.at(j);
+
+			std::vector<std::vector<highPeResult>> chGauss = res.gaussFits.at(i);
+			std::vector<std::vector<highPeResult>> chPmt = res.gaussFits.at(3);
+
+			for (int k = 0 ; k < (int) chGauss.size() ; k++)
+			{
+				if (j == 0)
+				{
+					std::vector<double> emptyVec;
+					mppcArr.push_back(emptyVec);
+					uMppcArr.push_back(emptyVec);
+					pmtArr.push_back(emptyVec);
+					uPmtArr.push_back(emptyVec);
+				}
+				for (int l = 0 ; l < (int) chGauss.at(k).size() ; l++)
+				{
+					if (j == 0)
+					{
+						double x = 0;
+						mppcArr.at(k).push_back(x);
+						uMppcArr.at(k).push_back(x);
+						pmtArr.at(k).push_back(x);
+						uPmtArr.at(k).push_back(x);
+					}
+					mppcArr.at(k).at(l) -= chGauss.at(k).at(l).mean;
+					uMppcArr.at(k).at(l) += square(chGauss.at(k).at(l).mean);
+					pmtArr.at(k).at(l) -= chPmt.at(k).at(l).mean;
+					uPmtArr.at(k).at(l) += square(chPmt.at(k).at(l).uMean);
+				}
+			}
+		}
+
+		int n = resVec.size();
+
+		std::cout << "MPPC " << i << std::endl;
+
+		double count = 0;
+		double tot = 0;
+
+		for (int j = 0 ; j < (int) resVec.at(0).gaussFits.at(i).size() ; j++)
+		{
+			for (int k = 0 ; k < (int) resVec.at(0).gaussFits.at(i).at(j).size() ; k++)
+			{
+				mppcArr.at(j).at(k) = mppcArr.at(j).at(k) / n;
+				uMppcArr.at(j).at(k) = sqrt(uMppcArr.at(j).at(k) / n - square(mppcArr.at(j).at(k)));
+				pmtArr.at(j).at(k) += pmtArr.at(j).at(k);
+				uPmtArr.at(j).at(k) += sqrt(uPmtArr.at(j).at(k));
+				tot += uMppcArr.at(j).at(k) / mppcArr.at(j).at(k);
+				count++;
+				// std::cout << uMppcArr.at(j).at(k) / mppcArr.at(j).at(k) << std::endl;
+			}
+		}
+		std::vector<std::vector<double>> emptyArr;
+		saveMultiGraph(pdfFile, title, pmtArr, mppcArr, pmtAxis, mppcAxis, allBias, emptyArr, uMppcArr);
+		std::cout << "###### Average uncertainty: " << tot / count << std::endl;
 	}
 	Ctmp->SaveAs((pdfFile + "]").c_str());
 }
