@@ -9,9 +9,7 @@
 #include <assert.h>
 #include <memory>
 
-#ifndef PS6000WRAPPER
-#include "libps6000a/ps6000aWrapper.h"
-#endif
+#include "ps6000a/ps6000aWrapper.h"
 
 #include <pybind11/pybind11.h>
 #include <pybind11/numpy.h>
@@ -131,7 +129,7 @@ void setTriggerConfig(dataCollectionConfig &dcc,
         {
             dcc.activeTriggers.set(i + 1);
             chTriggerThresholdADC.push_back(mv_to_adc(trigVoltageMv[i], 
-            dcc.unit.channelSettings[PICO_CHANNEL_A + i].range, &dcc.unit));
+            dcc.unit.channelSettings[i].range, &dcc.unit));
         }
         else
         {
@@ -141,7 +139,7 @@ void setTriggerConfig(dataCollectionConfig &dcc,
     if (auxTrigVoltageMv != 0)
     {
         dcc.activeTriggers.set(0);
-        dcc.auxTriggerThresholdADC = mv_to_adc(auxTrigVoltageMv, PICO_X1_PROBE_1V, &dcc.unit);
+        dcc.auxTriggerThresholdADC = mv_to_adc(auxTrigVoltageMv, PS_1V, &dcc.unit);
     }
     else
     {

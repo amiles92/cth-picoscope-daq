@@ -8,9 +8,7 @@
 #include <vector>
 #include <assert.h>
 
-#ifndef PS6000WRAPPER
-#include "libps6000/ps6000Wrapper.h"
-#endif
+#include "ps6000/ps6000Wrapper.h"
 
 #include <pybind11/pybind11.h>
 #include <pybind11/numpy.h>

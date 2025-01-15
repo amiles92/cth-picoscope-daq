@@ -23,17 +23,10 @@
 #include <stdlib.h>
 #endif
 
-#ifndef PS6000API
 #include <libps6000/ps6000Api.h>
-#endif
-
-#ifndef PICO_STATUS
 #include <libps6000/PicoStatus.h>
-#endif
 
-#ifndef PS6000WRAPPER
-#include "libps6000/ps6000Wrapper.h"
-#endif
+#include "ps6000/ps6000Wrapper.h"
 
 using namespace std;
 
@@ -50,7 +43,8 @@ uint16_t inputRanges [PS6000_MAX_RANGES] = {	10,
 												10000,
 												20000,
 												50000};
-BOOL        g_ready = FALSE;
+
+BOOL g_ready = FALSE;
 
 void set_info(UNIT *unit)
 {

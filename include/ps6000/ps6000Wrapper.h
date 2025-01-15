@@ -54,16 +54,6 @@ typedef struct
 	int16_t enabled;
 }CHANNEL_SETTINGS;
 
-typedef struct tTriggerDirections
-{
-	enum enPS6000ThresholdDirection channelA;
-	enum enPS6000ThresholdDirection channelB;
-	enum enPS6000ThresholdDirection channelC;
-	enum enPS6000ThresholdDirection channelD;
-	enum enPS6000ThresholdDirection ext;
-	enum enPS6000ThresholdDirection aux;
-}TRIGGER_DIRECTIONS;
-
 typedef struct tPwq
 {
 	struct tPS6000PwqConditions * conditions;

@@ -1,3 +1,5 @@
+#ifndef PS6000WRAPPER
+#define PS6000WRAPPER
 #include <stdio.h>
 #include <stdint.h>
 #include <stdexcept>
@@ -23,17 +25,10 @@
 #include <stdlib.h>
 #endif
 
-#ifndef PS6000API
 #include <libps6000a/ps6000aApi.h>
-#endif
-
-#ifndef PICO_STATUS
 #include <libps6000a/PicoStatus.h>
-#endif
 
-#ifndef PS6000WRAPPER
-#include "libps6000a/ps6000aWrapper.h"
-#endif
+#include "ps6000a/ps6000aWrapper.h"
 
 using namespace std;
 
@@ -79,8 +74,8 @@ void set_info(UNIT * unit)
 	uint32_t		maxArbitraryWaveformSize = 0;
 
 	//Initialise default unit properties and change when required
-	unit->firstRange = PICO_X1_PROBE_10MV;
-	unit->lastRange = PICO_X1_PROBE_20V;
+	unit->firstRange = PS_10MV;
+	unit->lastRange = PS_20V;
 	unit->channelCount = 4;
 	unit->digitalPortCount = 2;
 
@@ -256,11 +251,12 @@ vector<vector<void*>> SetDataBuffers(UNIT *unit, bitset<4> activeChannels,
 }
 
 void SetSimpleChannelTrigger(UNIT *unit, int16_t threshold, 
-		PICO_THRESHOLD_DIRECTION dir, PICO_CHANNEL ch)
+		PS_THRESHOLD_DIRECTION dir, PS_CHANNEL ch)
 {
 	disableTrigger(unit);
 
-	ps6000aSetSimpleTrigger(unit->handle, 1, ch, threshold, dir, 0, 0);
+	ps6000aSetSimpleTrigger(unit->handle, 1, (PICO_CHANNEL) ch, threshold, 
+		(PICO_THRESHOLD_DIRECTION) dir, 0, 0);
 	return;
 }
 
@@ -345,8 +341,8 @@ void SetTriggers(UNIT *unit, bitset<5> triggers, vector<int16_t> chThreshold, in
 			if (triggers.test(i + 1))
 			{
 				printf("Setting channel trigger\n");
-				SetSimpleChannelTrigger(unit, chThreshold.at(i), (PICO_THRESHOLD_DIRECTION)
-					((chThreshold.at(i) >= 0) ? PICO_RISING : PICO_FALLING), (PICO_CHANNEL) (PICO_CHANNEL_A + i));
+				SetSimpleChannelTrigger(unit, chThreshold.at(i), (PS_THRESHOLD_DIRECTION)
+					((chThreshold.at(i) >= 0) ? PICO_RISING : PICO_FALLING), (PS_CHANNEL) (PICO_CHANNEL_A + i));
 				break;
 			}
 		}
@@ -726,3 +722,5 @@ int16_t mv_to_adc(int16_t mv, int16_t rangeIndex, UNIT *unit)
 {
 	return (mv * unit->maxADCValue) / inputRanges[rangeIndex];
 }
+
+#endif

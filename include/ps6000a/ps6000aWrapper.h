@@ -1,5 +1,5 @@
-#ifndef DAQ6000AWRAPPER
-#define DAQ6000AWRAPPER
+#ifndef PS6000AWRAPPER
+#define PS6000AWRAPPER
 #include <stdio.h>
 #include <stdint.h>
 #include <stdexcept>
@@ -26,6 +26,58 @@
 
 #define PS6000A_MAX_CHANNELS 8 //analog chs only
 
+typedef enum enPSChannel
+{
+  PS_CHANNEL_A,
+  PS_CHANNEL_B,
+  PS_CHANNEL_C,
+  PS_CHANNEL_D,
+  PS_EXTERNAL,
+  PS_MAX_CHANNELS = PS_EXTERNAL,
+  PS_TRIGGER_AUX,
+  PS_MAX_TRIGGER_SOURCES
+} PS_CHANNEL;
+
+typedef enum enPSRange
+{
+  PS_10MV,
+  PS_20MV,
+  PS_50MV,
+  PS_100MV,
+  PS_200MV,
+  PS_500MV,
+  PS_1V,
+  PS_2V,
+  PS_5V,
+  PS_10V,
+  PS_20V,
+  PS_50V,
+  PS_MAX_RANGES,
+} PS_RANGE;
+
+typedef enum enPSThresholdDirection
+{
+  PS_ABOVE,             //using upper threshold
+  PS_BELOW,						 //using upper threshold
+  PS_RISING,            // using upper threshold
+  PS_FALLING,           // using upper threshold
+  PS_RISING_OR_FALLING, // using both threshold
+  PS_ABOVE_LOWER,       // using lower threshold
+  PS_BELOW_LOWER,       // using lower threshold
+  PS_RISING_LOWER,      // using lower threshold
+  PS_FALLING_LOWER,     // using lower threshold
+  // Windowing using both thresholds
+  PS_INSIDE        = PS_ABOVE,
+  PS_OUTSIDE       = PS_BELOW,
+  PS_ENTER         = PS_RISING,
+  PS_EXIT          = PS_FALLING,
+  PS_ENTER_OR_EXIT = PS_RISING_OR_FALLING,
+  PS_POSITIVE_RUNT = 9,
+  PS_NEGATIVE_RUNT,
+  // no trigger set
+  PS_NONE = PS_RISING
+} PS_THRESHOLD_DIRECTION;
+
 typedef enum enBOOL{FALSE,TRUE} BOOL;
 
 typedef struct
@@ -50,11 +102,11 @@ typedef struct
 	int16_t						complete;
 	int16_t						openStatus;
 	int16_t						openProgress;
-	PICO_CONNECT_PROBE_RANGE	firstRange;
-	PICO_CONNECT_PROBE_RANGE	lastRange;
+	PS_RANGE					firstRange;
+	PS_RANGE					lastRange;
 	int16_t						channelCount;
 	int16_t						maxADCValue;
-	CHANNEL_SETTINGS			channelSettings [PS6000A_MAX_CHANNELS];
+	CHANNEL_SETTINGS			channelSettings [PS_MAX_CHANNELS];
 	PICO_DEVICE_RESOLUTION		resolution;
 	int16_t						digitalPortCount;
 }UNIT;
@@ -72,7 +124,7 @@ std::vector<std::vector<void*>> SetDataBuffers(UNIT *unit, std::bitset<4> active
 void SetTimebase(UNIT *unit, uint8_t timebase, uint16_t maxChSamples);
 
 void SetSimpleChannelTrigger(UNIT *unit, int16_t threshold, 
-		PICO_THRESHOLD_DIRECTION dir, PICO_CHANNEL ch);
+		PS_THRESHOLD_DIRECTION dir, PS_CHANNEL ch);
 
 void SetSimpleAuxTrigger(UNIT *unit);
 
