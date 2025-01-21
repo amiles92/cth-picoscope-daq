@@ -971,6 +971,8 @@ individualPeResult individualPeAnalysis(const double* data, const int nWfs,
 	bestHist->GetYaxis()->SetTitle("Counts");
 	bestHist->Draw();
 
+	bestRes.hist = (TH1D*) bestHist->Clone();
+
 	std::vector<double> x;
 	std::vector<double> y;
 	for (int ind : peaks)
@@ -1750,6 +1752,7 @@ std::vector<std::vector<std::vector<highPeResult>>> gaussFitting(
 	}
 	c->SaveAs("/home/amiles/Documents/PhD/mppc-qc/plots/tmpGauss.pdf]");
 	delete c;
+	std::cout << std::endl;
 	return gaussFits;
 }
 
@@ -1838,6 +1841,7 @@ std::vector<std::vector<std::vector<individualPeResult>>> poissFitting(
 	}
 	c->SaveAs("/home/amiles/Documents/PhD/mppc-qc/plots/tmpPoiss.pdf]");
 	delete c;
+	std::cout << std::endl;
 	return poissFits;
 }
 
@@ -1994,15 +1998,12 @@ fileResults genericAnalysis(std::string filePath, std::string outputDir, bool fi
 	gStyle->SetOptFit(1111);
 
 	poissFits = poissFitting(dcp, forest, *picoscopeNames);
-	std::cout << std::endl;
 	std::cout << "###### Finished Poissonian-Gaussian Fitting" << std::endl;
 
 	gaussFits = gaussFitting(dcp, forest, *picoscopeNames);
-	std::cout << std::endl;
 	std::cout << "###### Finished Gaussian Fitting" << std::endl;
 
 	timestamps = timestampExtraction(dcp, treeTimestamps, *picoscopeNames);
-
 	std::cout << "###### Finished Timestamp extraction" << std::endl;
 	
 	fileResults res = {*mppcNumbers, dcp, timestamps, gaussFits, poissFits, darkFits};

@@ -155,6 +155,7 @@ struct individualPeResult
 	double pePeakSeparation;      double uPePeakSeparation;
 	double pePeakSeparationSigma; double uPePeakSeparationSigma;
 	int nPeaks; double chi2;
+	TH1D* hist;
 };
 
 struct highPeResult
