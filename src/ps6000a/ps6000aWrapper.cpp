@@ -720,7 +720,8 @@ void PREF4 MultiCallBackBlock(int16_t handle, PICO_STATUS status, void *pParamet
 ****************************************************************************/
 int16_t mv_to_adc(int16_t mv, int16_t rangeIndex, UNIT *unit)
 {
-	return (mv * unit->maxADCValue) / inputRanges[rangeIndex];
+	double res = (mv * unit->maxADCValue);
+	return res / inputRanges[rangeIndex];
 }
 
 #endif
