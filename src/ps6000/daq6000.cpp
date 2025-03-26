@@ -509,6 +509,6 @@ PYBIND11_MODULE(daq6000, m)
     m.def("getSerials", &getSerials, py::return_value_policy::copy);
     m.def("initFunctionGenerator", &seriesInitDaq, py::return_value_policy::copy);
     m.def("runFunctionGenerator", &runFunctionGenerator, py::return_value_policy::copy);
-    m.def("closeFunctionGenerator", &seriesCloseDaq, py::return_value_policy::copy);
+    m.def("clearFunctionGenerator", &clearFunctionGenerator, py::return_value_policy::copy);
 }
 
