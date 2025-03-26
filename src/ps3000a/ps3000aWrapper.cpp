@@ -202,25 +202,25 @@ vector<vector<void*>> SetDataBuffers(UNIT *unit, bitset<4> activeChannels,
 	}
 	ps3000aSetNoOfCaptures(unit->handle, numWaveforms);
 
-	PICO_ACTION action = (PICO_ACTION) (PICO_CLEAR_ALL | PICO_ADD);
-
+	int active = 0;
 	for (int i = 0; i < 4; i++)
 	{
 		if (!activeChannels.test(i)) {continue;}
 
 		int32_t chSamples = samplesPreTrigger + samplesPostPerChannel.at(i);
-		outBuffers.at(i) = vector<void*>(numWaveforms);
+		outBuffers.at(active) = vector<void*>(numWaveforms);
 
 		for (int j = 0; j < numWaveforms; j++)
 		{
-			outBuffers.at(i).at(j) = calloc(chSamples, sizeof(int16_t));
-			if (outBuffers.at(i).at(j) == NULL)
+			outBuffers.at(active).at(j) = calloc(chSamples, sizeof(int16_t));
+			if (outBuffers.at(active).at(j) == NULL)
 			{
-				printf("Memory allocation failed: Ch %d, Wf %d\n", i, j);
+				printf("Memory allocation failed: Ch %d, Wf %d\n", active, j);
 			}
 			ps3000aSetDataBuffer(unit->handle, (PS3000A_CHANNEL) (i),
-				(int16_t*) outBuffers.at(i).at(j), chSamples, j, PS3000A_RATIO_MODE_NONE);
+				(int16_t*) outBuffers.at(active).at(j), chSamples, j, PS3000A_RATIO_MODE_NONE);
 		}
+		active++;
 	}
 
 	return outBuffers;
@@ -229,7 +229,7 @@ vector<vector<void*>> SetDataBuffers(UNIT *unit, bitset<4> activeChannels,
 void SetSimpleChannelTrigger(UNIT *unit, int16_t threshold, 
 		PS_THRESHOLD_DIRECTION dir, PS_CHANNEL ch)
 {
-	ps3000aSetSimpleTrigger(unit->handle, 1, (PS3000A_CHANNEL) ch, threshold, 
+	PICO_STATUS status = ps3000aSetSimpleTrigger(unit->handle, 1, (PS3000A_CHANNEL) ch, threshold, 
 		(PS3000A_THRESHOLD_DIRECTION) dir, 0, 0);
 	return;
 }
@@ -680,5 +680,5 @@ void MultiCallBackBlock(int16_t handle, PICO_STATUS status, void *pParameter)
 ****************************************************************************/
 int16_t mv_to_adc(int16_t mv, int16_t rangeIndex, UNIT *unit)
 {
-	return (mv * unit->maxADCValue) / (PS3000A_RANGE) rangeIndex;
+	return (mv / psmVRange.at(rangeIndex)) * unit->maxADCValue;
 }

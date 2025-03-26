@@ -38,7 +38,7 @@ public:
     BOOL unitInitialised = FALSE;
 
     char serial[32];
-    dataCollectionConfig(UNIT unit, char *serial)
+    dataCollectionConfig(UNIT &unit, char *serial)
     {
         this->unit = unit;
         strcpy(this->serial, serial);
@@ -375,7 +375,8 @@ void writeDataHeader(dataCollectionConfig &dcc, ofstream &of)
 
     for (int i = 0; i < 4; i++)
     {
-        ou16 = bswapu16(dcc.chPostSamplesPerWaveform.at(i) + dcc.samplesPreTrigger);
+        ou16 = dcc.activeChannels.test(i) *
+            bswapu16(dcc.chPostSamplesPerWaveform.at(i) + dcc.samplesPreTrigger);
         of.write((const char *) &ou16, sizeof(uint16_t));
     }
 
@@ -411,10 +412,17 @@ void writeDataOut(dataCollectionConfig &dcc, ofstream &of)
     
     int16_t o16;
     uint32_t s = dcc.bit8Buffers ? sizeof(int8_t) : sizeof(int16_t);
+    int i = 0;
 
-    for (int i = 0; i < dcc.activeChannels.count(); i++)
+    for (int ch = 0; ch < 4; ch++)
     {
-        uint64_t nSamples = (dcc.chPostSamplesPerWaveform.at(i) 
+        if (!(dcc.activeChannels.test(ch)))
+        {
+            continue;
+        }
+
+        int count = 0;
+        uint64_t nSamples = (dcc.chPostSamplesPerWaveform.at(ch) 
                            + dcc.samplesPreTrigger);
         for (int j = 0; j < dcc.numWaveforms; j++)
         {
@@ -432,6 +440,7 @@ void writeDataOut(dataCollectionConfig &dcc, ofstream &of)
                 }
             }
         }
+        i++;
     }
 }
 
@@ -691,7 +700,7 @@ int runFullDAQ(char *outputFileBasename,
             int16_t auxTrigger, uint8_t timebase,
             uint32_t numWaveforms, int16_t samplesPreTrigger, char *serial)
 {
-    UNIT *unit;
+    UNIT *unit = new UNIT();
     if (serial == "") {serial = NULL;}
     findUnit(unit, (int8_t*) serial);
     try

@@ -114,8 +114,8 @@ typedef enum
 typedef struct
 {
 	int16_t					handle;
-	int8_t					modelString[8];
-    int8_t					serial[10];
+	int8_t					modelString[20];
+  int8_t					serial[20];
 	PS_RANGE				firstRange ;
 	PS_RANGE				lastRange;
 	int16_t					channelCount;
@@ -128,6 +128,23 @@ typedef struct
 	PICO_STATUS				openStatus;
 	int8_t					complete;
 } UNIT;
+
+const double psmVRange[PS_MAX_RANGES] = 
+{
+    10,
+    20,
+    50,
+    100,
+    200,
+    500,
+    1000,
+    2000,
+    5000,
+    10000,
+    20000,
+    50000,
+};
+
 
 void set_info(UNIT *unit);
 
