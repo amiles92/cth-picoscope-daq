@@ -152,7 +152,7 @@ def main(mppcList, reset, extra=''):
 
     date = datetime.today().strftime('%Y-%m-%d')
 
-    directory = r'/media/cdc/MPPC-QC/QC-data/test_2024Nov'
+    directory = r'/media/cdc/MPPC-QC/QC-data/test_2025Mar'
     mppcStr = "-".join(mppcList)
     if extra != '':
         extra = '_' + extra
@@ -183,7 +183,7 @@ def main(mppcList, reset, extra=''):
     mv1kShortList = [610]
     ledShortSweep = [mv50ShortList, mv200ShortList, mv1kShortList]
 
-    quickCheckLedV = 675
+    quickCheckLedV = 630
 
     # bias voltage is key, first list if 50mV range, second list is 200mV
     ledVoltageMap = {83  : ledShortSweep, # [[840],[880, 900]],
