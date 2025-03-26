@@ -47,22 +47,6 @@ def closePicoscopes():
     gen.clearFunctionGenerator()
     return
 
-def runBigSweep(bias, mppcStr, date, pmt, d, extra):
-    """
-    Runs extra big DAQ with fine sweeping of 5mV increments
-    Values are calibrated for around 21-23C operation, behaviour outside
-    this range is not known yet
-    """
-    s = r'%s'
-    outFilePattern = d + r"%s_%sV_%s_%skV_%s%s" % \
-                        (date, str(bias), s, pmt, mppcStr, extra)
-    
-    runDark(outFilePattern)
-
-    runMvList(2, outFilePattern, [525, 540, 545], 2)
-    runMvList(4, outFilePattern, [565, 575, 585], 4)
-    runMvList(6, outFilePattern, [600, 610, 620, 630], 6)
-
 def daqPerBias(bias, mppcStr, mvLists, date, pmt, d, extra):
     """Runs DAQ for a range of LED Voltages for a given bias voltage"""
     s = r'%s'
@@ -72,7 +56,7 @@ def daqPerBias(bias, mppcStr, mvLists, date, pmt, d, extra):
     runDark(outFilePattern)
 
     if len(mvLists) > 0:
-        runMvList(2, outFilePattern, mvLists[0], 2) # 20 mV PMT range for low light
+        runMvList(2, outFilePattern, mvLists[0], 2)
 
     if len(mvLists) > 1:
         runMvList(4, outFilePattern, mvLists[1], 4)
@@ -125,22 +109,19 @@ def quickCheck(bias, mppcStr, ledV, date, pmt, d, extra, picoscopes):
     Specific values are hard coded in sanityCheck.py. It will halt if the value
     is low, but can be continued or killed if it fails.
     """
-    print("71")
     daq.multiSeriesSetDaqSettings(
                     0, 4, 400,
                     0, 4, 400,
                     0, 4, 400,
                     0, 2, 400,
                     100, 2, 1000, 0)
-    
-    print("79")
+
     out = d + r"Check_%s_%sV_%s_%skV_%s%s" % \
                 (date, str(bias), ledV, pmt, mppcStr, extra)
     
     gen.runFunctionGenerator(ledV,38)
     print("\n\n\nNext DAQ: %s" % out)
     daq.multiSeriesCollectData(out)
-    print("86")
 
     ex = False
     for ps in picoscopes:
@@ -157,6 +138,12 @@ def quickCheck(bias, mppcStr, ledV, date, pmt, d, extra, picoscopes):
                 return False
 
     return True
+
+def safeExit(vs, jumpTarget, msg): # meant for crash handling
+    vc.rampVoltage(vs, jumpTarget)
+    vc.jumpVoltage(vs, 0)
+    vs.instrument.write("*RST")
+    raise RuntimeError(msg)
 
 def main(mppcList, reset, extra=''):
 
@@ -183,22 +170,30 @@ def main(mppcList, reset, extra=''):
 
     biasVoltageList = [83, 82.5, 82, 81.5, 81, 80.5, 80, 79.5, 79, 78.5, 78]
 
-    mv50List = [525, 540, 545]
-    mv200List = [565, 575, 585]
-    mv1kList = [600, 610, 620, 630]
+    mv50LongList = [540, 545]
+    mv200LongList = [565, 585]
+    mv1kLongList = [600, 610, 630]
+    ledLongSweep = [mv50LongList, mv200LongList, mv1kLongList]
+
+    mv50ShortList = [540]
+    mv200ShortList = [585]
+    mv1kShortList = [610]
+    ledShortSweep = [mv50ShortList, mv200ShortList, mv1kShortList]
+
+    quickCheckLedV = 675
 
     # bias voltage is key, first list if 50mV range, second list is 200mV
-    ledVoltageMap = {83  : [mv50List, mv200List, mv1kList], # [[840],[880, 900]],
-                     82.5: [mv50List, mv200List, mv1kList], # [[840],[880, 900]],
-                     82  : [mv50List, mv200List, mv1kList], # [[840],[880, 900]],
-                     81.5: [mv50List, mv200List, mv1kList], # [[820, 840, 850],[880, 890, 900]],
-                     81  : [mv50List, mv200List, mv1kList], # [[820, 840, 850],[880, 890, 900]],
-                     80.5: [mv50List, mv200List, mv1kList], # [[820, 840, 850],[880, 890, 900]],
-                     80  : [mv50List, mv200List, mv1kList], # [[840],[880, 900]],
-                     79.5: [mv50List, mv200List, mv1kList], # [[840],[880, 900]],
-                     79  : [mv50List, mv200List, mv1kList], # [[840],[880, 900]],
-                     78.5: [mv50List, mv200List, mv1kList], # [[840],[880, 900]],
-                     78  : [mv50List, mv200List, mv1kList], # [[840],[880, 900]],
+    ledVoltageMap = {83  : ledShortSweep, # [[840],[880, 900]],
+                     82.5: ledShortSweep, # [[840],[880, 900]],
+                     82  : ledShortSweep, # [[840],[880, 900]],
+                     81.5: ledLongSweep, # [[820, 840, 850],[880, 890, 900]],
+                     81  : ledLongSweep, # [[820, 840, 850],[880, 890, 900]],
+                     80.5: ledLongSweep, # [[820, 840, 850],[880, 890, 900]],
+                     80  : ledShortSweep, # [[840],[880, 900]],
+                     79.5: ledShortSweep, # [[840],[880, 900]],
+                     79  : ledShortSweep, # [[840],[880, 900]],
+                     78.5: ledShortSweep, # [[840],[880, 900]],
+                     78  : ledShortSweep, # [[840],[880, 900]],
     }
 
     targetVoltage   = biasVoltageList[0]
@@ -229,21 +224,19 @@ def main(mppcList, reset, extra=''):
 
     input("Ramp PMT then press enter to begin...")
 
-    res = quickCheck(targetVoltage, mppcStr, 675, date, pmt, path, extra, picoscopes)
+    res = quickCheck(targetVoltage, mppcStr, quickCheckLedV, date, pmt, path, extra, picoscopes)
     if not res:
-        vc.rampVoltage(vs, jumpTarget)
-        vc.jumpVoltage(vs, 0)
-        vs.instrument.write("*RST")
-        exit()
+        safeExit(vs, jumpTarget, "Quick check failed, early ramp down initiated")
 
     try:
         for bias in biasVoltageList:
             vc.rampVoltage(vs, bias)
-            # runBigSweep(bias, mppcStr, date, pmt, path, extra)
             mvLists = ledVoltageMap[bias]
             daqPerBias(bias, mppcStr, mvLists, date, pmt, path, extra)
-    except:
-        vc.rampVoltage(vs, 0)
+    except KeyboardInterrupt:
+        safeExit(vs, jumpTarget, "Data collection loop was interrupted by user")
+    except Exception as e:
+        safeExit(vs, 0, "Data collection failed due to exception:\n" + str(e))
 
     try:
         vc.rampVoltage(vs, jumpTarget)
