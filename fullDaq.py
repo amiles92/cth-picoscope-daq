@@ -6,6 +6,7 @@ import IV_Curve as vc
 import sanityCheck as sc
 import daq6000 as gen
 import daq6000a as daq
+import isegNhqControl as nhq
 
 ### GLOBAL FLAGS ###
 g_quickPlots = True
@@ -167,6 +168,8 @@ def main(mppcList, reset, extra=''):
 
     sc.g_picoscopes = picohyphen # so that quickPlot can find files properly
     pmt = "1.4"
+    pmtVoltage = 1400
+    pmtVoltageRampSpeed = 50 # V/s
 
     biasVoltageList = [83, 82.5, 82, 81.5, 81, 80.5, 80, 79.5, 79, 78.5, 78]
 
@@ -203,8 +206,19 @@ def main(mppcList, reset, extra=''):
 
     jumpTarget = 70
 
+    isegSer = nhq.initSerial(1) # MUST BE /dev/ttyUSB1
+    if isegSer == None:
+        print("Incorrect port configurations. Unplug and replug them in the correct order.")
+        return
+    
+    nhq.isegSetVoltage(isegSer, pmtVoltage)
+    nhq.isegSetVoltageRampSpeed(isegSer, pmtVoltageRampSpeed)
+    status = nhq.isegStartVoltageRamp(isegSer)
+    if status not in ["S1=L2H", "S1=H2L", "S1=ON"]:
+        print("PMT HV Supply incorrectly configured. Response:", status)
+
     vs = vc.voltageSettings(reset, threshVoltage, normIncrement, 
-                            threshIncrement)
+                            threshIncrement) # MUST BE /dev/ttyUSB0
 
     if not reset:
         vc.rampDown(vs, jumpTarget, 0)
@@ -212,7 +226,7 @@ def main(mppcList, reset, extra=''):
         vs.instrument.write("*RST")
 
     if mppcStr == "999-999-999":
-        exit()
+        return
 
     initPicoScopes(picoscopes, fnGen)
  
@@ -222,7 +236,16 @@ def main(mppcList, reset, extra=''):
 
     vc.rampVoltage(vs, targetVoltage)
 
-    input("Ramp PMT then press enter to begin...")
+    # confirm pmt ramped properly
+    status = nhq.isegGetStatus(isegSer)
+    while status in ["S1=L2H", "S1=H2L"]:
+        time.sleep(1)
+        status = nhq.isegGetStatus(isegSer)
+    
+    if status != "S1=ON":
+        print("Possible problem with PMT supply, please manually ramp it down")
+        print("PMT Supply response:", status)
+        safeExit(vs, jumpTarget, "Error in PMT HV supply")
 
     res = quickCheck(targetVoltage, mppcStr, quickCheckLedV, date, pmt, path, extra, picoscopes)
     if not res:
@@ -237,6 +260,12 @@ def main(mppcList, reset, extra=''):
         safeExit(vs, jumpTarget, "Data collection loop was interrupted by user")
     except Exception as e:
         safeExit(vs, 0, "Data collection failed due to exception:\n" + str(e))
+
+    nhq.isegSetVoltage(isegSer, 0)
+    nhq.isegStartVoltageRamp(isegSer)
+    if status not in ["S1=L2H", "S1=H2L", "S1=ON"]:
+        print("Possible problem with PMT supply, please manually ramp it down")
+        print("PMT Supply response:", status)
 
     try:
         vc.rampVoltage(vs, jumpTarget)
