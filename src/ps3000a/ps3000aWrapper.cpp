@@ -680,5 +680,5 @@ void MultiCallBackBlock(int16_t handle, PICO_STATUS status, void *pParameter)
 ****************************************************************************/
 int16_t mv_to_adc(int16_t mv, int16_t rangeIndex, UNIT *unit)
 {
-	return (mv / psmVRange.at(rangeIndex)) * unit->maxADCValue;
+	return (mv / psmVRange[rangeIndex]) * unit->maxADCValue;
 }
