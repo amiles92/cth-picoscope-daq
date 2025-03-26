@@ -810,7 +810,8 @@ void PREF4 CallBackBlock(int16_t handle, PICO_STATUS status, void * pParameter)
 ****************************************************************************/
 int16_t mv_to_adc(int16_t mv, int16_t ch)
 {
-	return (mv * PS6000_MAX_VALUE) / inputRanges[ch];
+	double res = (mv * PS6000_MAX_VALUE);
+	return res / inputRanges[ch];
 }
 
 void ClearPulseGen(UNIT *unit)
