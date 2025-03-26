@@ -1,7 +1,7 @@
 import numpy as np
 import matplotlib.pyplot as plt
 
-ps6000VRanges = [10, 20, 50, 100, 200, 500, 1000, 2000, 5000, 
+psVRanges = [10, 20, 50, 100, 200, 500, 1000, 2000, 5000, 
                  10000, 20000, 50000]
 
 def byteBin(byte):
@@ -44,8 +44,11 @@ def bytesString(f, n = 0): # xxx: if n = 0, read until 0 byte, else read n bytes
         c = f.read(1)
     return s
 
-def adc2mv(value, range):
-    return (value / 32512) * ps6000VRanges[range]
+def adc2mv16Bit(value, range):
+    return (value / 32512) * psVRanges[range]
+
+def adc2mv8Bit(value, range):
+    return (value / 128) * psVRanges[range]
 
 def readHeader(f):
     d = {}
@@ -53,13 +56,20 @@ def readHeader(f):
     b = f.read(1)
     d['timebase'] = ord(b) >> 4
     d['activeChannels'] = byteBin(b)[4:]
-    d['activeTriggers'] = byteBin(f.read(1))[3:]
-    d['auxTriggerThreshold'] = adc2mv(bytesTwos(f,2),6)
+    trigAndDataSize = byteBin(f.read(1))
+    d['activeTriggers'] = trigAndDataSize[3:]
+    d['8bitData'] = bool(int(trigAndDataSize[2]))
+    d['auxTriggerThreshold'] = adc2mv16Bit(bytesTwos(f,2),6)
+    
+    tmpChTriggerThreshold = []
     for i in range(nCh):
-        d['ch' + chr(ord('A') + i) + 'TriggerThreshold'] = adc2mv(bytesTwos(f,2),6)
+        tmpChTriggerThreshold.append(bytesTwos(f,2))
+    print(tmpChTriggerThreshold)
     vRanges = bytesBin(f,2)
     for i in range(nCh):
-        d['ch' + chr(ord('A') + i) + 'VRange'] = int(vRanges[4*i:4*(i + 1)],2)
+        vRange = int(vRanges[4*i:4*(i + 1)],2)
+        d['ch' + chr(ord('A') + i) + 'VRange'] = vRange
+        d['ch' + chr(ord('A') + i) + 'TriggerThreshold'] = adc2mv16Bit(tmpChTriggerThreshold[i],vRange)
     for i in range(nCh):
         d['ch' + chr(ord('A') + i) + 'Samples'] = bytesInt(f,2)
     d['preTriggerSamples'] = bytesInt(f,2)
@@ -80,8 +90,13 @@ def readData(f, d):
             continue
         nWf = d['numWaveforms']
         nSamples = d['ch' + chr(ord('A') + ch) + 'Samples']
-        chADCData = np.fromfile(f, dtype='>i2', count=nWf * nSamples).reshape((nWf,nSamples))
-        chData = adc2mv(chADCData, d['ch' + chr(ord('A') + ch) + 'VRange'])
+        if not d['8bitData']:
+            chADCData = np.fromfile(f, dtype='>i2', count=nWf * nSamples).reshape((nWf,nSamples))
+            chData = adc2mv16Bit(chADCData, d['ch' + chr(ord('A') + ch) + 'VRange'])
+        else:
+            chADCData = np.fromfile(f, dtype='i1', count=nWf * nSamples).reshape((nWf,nSamples))
+            chData = adc2mv8Bit(chADCData, d['ch' + chr(ord('A') + ch) + 'VRange'])
+        
 
         data.append(chData)
 
@@ -105,7 +120,4 @@ for i in range(100):
 plt.figure()
 for i in range(100):
     plt.plot(data[1][i], alpha=0.2)
-plt.figure()
-for i in range(100):
-    plt.plot(data[2][i], alpha=0.2)
 plt.show()
