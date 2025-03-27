@@ -166,6 +166,7 @@ def quickPlot(filePattern, nWfs=1000):
             ch = chr(ord('A') + i)
             chData, ax = data[i], axs[i // 2][i % 2]
             minData = np.min(chData[:nWfs], axis=1, keepdims=True) # only take first 1000 wfs, might be faster?
+            minData = minData.astype('int32')
             if header['8bitReadout'] == '1':
                 nBins = np.round(np.max(minData) - np.min(minData)) + 1
                 ax.hist(minData, bins=nBins, alpha=0.7, label=ps)
