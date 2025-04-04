@@ -140,7 +140,9 @@ def quickCheck(bias, mppcStr, ledV, date, pmt, d, extra, picoscopes):
 
     return True
 
-def safeExit(vs, jumpTarget, msg): # meant for crash handling
+def safeExit(vs, isegSer, jumpTarget, msg): # meant for crash handling
+    nhq.isegSetVoltage(isegSer, 0)
+    nhq.isegStartVoltageRamp(isegSer)
     vc.rampVoltage(vs, jumpTarget)
     vc.jumpVoltage(vs, 0)
     vs.instrument.write("*RST")
@@ -152,7 +154,7 @@ def main(mppcList, reset, extra=''):
 
     date = datetime.today().strftime('%Y-%m-%d')
 
-    directory = r'/media/cdc/MPPC-QC/QC-data/test_2025Mar'
+    directory = r'/media/cdc/MPPC-QC/qcData/' + date
     mppcStr = "-".join(mppcList)
     if extra != '':
         extra = '_' + extra
@@ -226,6 +228,8 @@ def main(mppcList, reset, extra=''):
         vs.instrument.write("*RST")
 
     if mppcStr == "999-999-999":
+        nhq.isegGetSetVoltage(isegSer, 0)
+        nhq.isegStartVoltageRamp(isegSer)
         return
 
     initPicoScopes(picoscopes, fnGen)
@@ -245,11 +249,11 @@ def main(mppcList, reset, extra=''):
     if status != "S1=ON":
         print("Possible problem with PMT supply, please manually ramp it down")
         print("PMT Supply response:", status)
-        safeExit(vs, jumpTarget, "Error in PMT HV supply")
+        safeExit(vs, isegSer, jumpTarget, "Error in PMT HV supply")
 
     res = quickCheck(targetVoltage, mppcStr, quickCheckLedV, date, pmt, path, extra, picoscopes)
     if not res:
-        safeExit(vs, jumpTarget, "Quick check failed, early ramp down initiated")
+        safeExit(vs, isegSer, jumpTarget, "Quick check failed, early ramp down initiated")
 
     try:
         for bias in biasVoltageList:
@@ -257,9 +261,9 @@ def main(mppcList, reset, extra=''):
             mvLists = ledVoltageMap[bias]
             daqPerBias(bias, mppcStr, mvLists, date, pmt, path, extra)
     except KeyboardInterrupt:
-        safeExit(vs, jumpTarget, "Data collection loop was interrupted by user")
+        safeExit(vs, isegSer, jumpTarget, "Data collection loop was interrupted by user")
     except Exception as e:
-        safeExit(vs, 0, "Data collection failed due to exception:\n" + str(e))
+        safeExit(vs, isegSer, 0, "Data collection failed due to exception:\n" + str(e))
 
     nhq.isegSetVoltage(isegSer, 0)
     nhq.isegStartVoltageRamp(isegSer)
