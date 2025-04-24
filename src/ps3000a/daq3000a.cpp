@@ -327,7 +327,8 @@ void writeDataHeader(dataCollectionConfig &dcc, ofstream &of)
      * Bit layout, in order
      * 4 bits: timebase (from 0-4 for ps6000)
      * 4 bits: ch1-4 active
-     * 3 bits: padding
+     * 2 bits: padding
+     * 1 bit: 1 if the data is 1 byte per sample, 0 if its 2 bytes per sample
      * 5 bits: ch1-4, aux trigger active
      * 16 bits: aux trigger threshold
      * 64 (16*4) bits: trigger threshold (ch1-4)
