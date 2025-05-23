@@ -87,7 +87,7 @@ def main(iterations):
         safeExit(isegSer, "Error in PMT HV supply")
 
     try:
-        for iter in range(iterations):
+        for iter in range(int(iterations)):
             prev = time.time()
             daq.multiSeriesCollectData(oFilePattern % iter)
             delay = 3600 + prev - time.time()
