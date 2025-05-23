@@ -198,7 +198,7 @@ def quickPlotPmt(filePattern, nWfs=1000): # Should be used when taking ONLY PMT 
         fileName = filePattern % ps
         header, data = readFileAdc(fileName)
         chData = data[0]
-        minData = np.min(chData[:nWfs], axis=1, keepdims=True) # only take first 1000 wfs, might be faster?
+        minData = np.min(chData[300:300 + nWfs], axis=1, keepdims=True) # only take first 1000 wfs, might be faster?
         minData = minData.astype('int32')
 
         if header['8bitReadout'] == '1':
