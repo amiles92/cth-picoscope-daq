@@ -81,6 +81,8 @@ def main(iterations):
         time.sleep(1)
         status = nhq.isegGetStatus(isegSer)
     
+    gen.runFunctionGenerator(ledVoltage,38)
+    
     if status != "S1=ON":
         print("Possible problem with PMT supply, please manually ramp it down")
         print("PMT Supply response:", status)
