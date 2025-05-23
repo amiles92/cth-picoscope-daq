@@ -202,8 +202,9 @@ def quickPlotPmt(filePattern, nWfs=1000): # Should be used when taking ONLY PMT 
         minData = minData.astype('int32')
 
         if header['8bitReadout'] == '1':
-            nBins = np.round(np.max(minData) - np.min(minData)) + 1
-            plt.hist(minData, bins=nBins, alpha=0.7, label=ps)
+            # nBins = np.round(np.max(minData) - np.min(minData)) + 1
+            nBins = 512
+            plt.hist(minData, bins=nBins, alpha=0.7, label=ps, range=[-256,256])
         else:
             nBins = np.round(np.max(minData) - np.min(minData)) // 256 + 1
             plt.hist(minData // 256, bins=nBins, alpha=0.7, label=ps)
