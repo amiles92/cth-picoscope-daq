@@ -73,7 +73,7 @@ def main(iterations):
                     0, 4, 400,
                     100, 2, 20000, 0)
 
-    oFilePattern = path + "_".join(date, ledStr, "1.4kV", "%i")
+    oFilePattern = path + "_".join([date, ledStr, "1.4kV", "%i"])
 
     # confirm pmt ramped properly
     status = nhq.isegGetStatus(isegSer)
