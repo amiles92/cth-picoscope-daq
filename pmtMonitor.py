@@ -90,6 +90,7 @@ def main(iterations):
         for iter in range(int(iterations)):
             prev = time.time()
             daq.multiSeriesCollectData(oFilePattern % iter)
+            sc.quickPlotPmt((oFilePattern % iter) + "_%s.dat")
             delay = 3600 + prev - time.time()
             time.sleep(delay)
     except KeyboardInterrupt:
