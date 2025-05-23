@@ -119,6 +119,12 @@ def readDataAdc(f, d):
 def readFile(fname):
     with open(fname, 'rb') as f:
         header = readHeader(f)
+        data = readData(f, header)
+    return header, data
+
+def readFileAdc(fname):
+    with open(fname, 'rb') as f:
+        header = readHeader(f)
         data = readDataAdc(f, header)
     return header, data
 
@@ -157,9 +163,7 @@ def quickPlot(filePattern, nWfs=1000):
 
     for ps in g_picoscopes:
         fileName = filePattern % ps
-        with open(fileName, 'rb') as f:
-            header = readHeader(f)
-            data = readDataAdc(f, header)
+        header, data = readFileAdc(fileName)
         
         # for chData, ax in data, axs:
         for i in range(4):
@@ -181,6 +185,33 @@ def quickPlot(filePattern, nWfs=1000):
     plt.show()
     plt.pause(0.001)
 
+    return
+
+def quickPlotPmt(filePattern, nWfs=1000): # Should be used when taking ONLY PMT data
+    global g_fig
+    if g_fig != None:
+        g_fig.clf()
+    else:
+        g_fig = plt.figure()
+    
+    for ps in g_picoscopes:
+        fileName = filePattern % ps
+        header, data = readFileAdc(fileName)
+        chData = data[0]
+        minData = np.min(chData[:nWfs], axis=1, keepdims=True) # only take first 1000 wfs, might be faster?
+        minData = minData.astype('int32')
+
+        if header['8bitReadout'] == '1':
+            nBins = np.round(np.max(minData) - np.min(minData)) + 1
+            plt.hist(minData, bins=nBins, alpha=0.7, label=ps)
+        else:
+            nBins = np.round(np.max(minData) - np.min(minData)) // 256 + 1
+            plt.hist(minData // 256, bins=nBins, alpha=0.7, label=ps)
+
+    plt.legend()
+    plt.tight_layout()
+    plt.show()
+    plt.pause(0.001)
     return
 
 def main(fileName, plot=True, output=True, show=True):
