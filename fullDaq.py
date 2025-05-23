@@ -228,7 +228,7 @@ def main(mppcList, reset, extra=''):
         vs.instrument.write("*RST")
 
     if mppcStr == "999-999-999":
-        nhq.isegGetSetVoltage(isegSer, 0)
+        nhq.isegSetVoltage(isegSer, 0)
         nhq.isegStartVoltageRamp(isegSer)
         return
 
