@@ -149,6 +149,11 @@ def safeExit(vs, isegSer, jumpTarget, msg): # meant for crash handling
     raise RuntimeError(msg)
 
 def main(mppcList, reset, extra=''):
+    checkLine = "\n\nBegin QC with " + " ".join(mppcList) + "? [Y]/N: "
+    check = input(checkLine)
+    if check.lower()[0] == 'n':
+        print("Aborting QC")
+        exit()
 
     start = time.time()
 
