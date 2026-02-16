@@ -7,6 +7,7 @@ Created on Thu Jul 18 16:10:02 2024
 
 import sys
 import os
+import platform
 import argparse
 import pyvisa as visa
 import time
@@ -15,29 +16,49 @@ import matplotlib.pyplot as plt
 
 plt.ion()
 
+def errorAndExit():
+    print("Please ramp down the device manually")
+    print("    To do so, press the \"Config/Local\" button and then use the")
+    print("    up and down arrow buttons in the \"V-SOURCE\" box, with gray")
+    print("    body colour and a white triangular arrow.")
+    print("")
+    print("    Change which digit to increment with the left and right arrow")
+    print("    buttons directly below them, with white body colour and gray")
+    print("    arrows.")
+    print("")
+    print("    Once safely ramped down, press the \"OPER\" button to switch")
+    print("    the voltage off.")
+    print("")
+    print("    DO NOT USE THE PURE WHITE \"RANGE\" BUTTONS!!!")
+    exit()
+
 class voltageSettings:
     voltageRange = 0
     def __init__(self, resetFlag, threshVoltage, normIncrement, 
-                 threshIncrement, numMeasurements, trigDelay):
-        self.ivCheck = True
+                 threshIncrement, numMeasurements=0, trigDelay=0):
+        if numMeasurements == 0:
+            self.ivCheck = False
+        else:
+            self.ivCheck = True
+            self.numMeasurements = numMeasurements
+            self.trigDelay = trigDelay
+
         self.instrument = initialisePowerSupply(resetFlag, numMeasurements, trigDelay)
         self.threshVoltage = threshVoltage
         self.normIncrement = normIncrement
         self.threshIncrement = threshIncrement
-        self.numMeasurements = numMeasurements
-        self.trigDelay = trigDelay
 
-    def __init__(self, resetFlag, threshVoltage, normIncrement, threshIncrement):
-        self.ivCheck = False
-        self.instrument = initialisePowerSupply(resetFlag, 0, 0)
-        self.threshVoltage = threshVoltage
-        self.normIncrement = normIncrement
-        self.threshIncrement = threshIncrement
-        return
+    # def __init__(self, resetFlag, threshVoltage, normIncrement, threshIncrement):
+        # self.ivCheck = False
+        # self.instrument = initialisePowerSupply(resetFlag, 0, 0)
+        # self.threshVoltage = threshVoltage
+        # self.normIncrement = normIncrement
+        # self.threshIncrement = threshIncrement
+        # return
 
 def grabArgs():
 
-    usage = 'python3 RS232_IV_21.py [-h] <voltage-level> <voltage-increment> ' + \
+    usage = 'python3 RS232_IV_Curve.py [-h] <voltage-level> <voltage-increment> ' + \
         '<threshold-voltage> <threshold-increment> [-i <file-basename> ' + \
         '<num-measurements> <trigger-delay>] [-j <jump-voltage>] [--no-reset]'
 
@@ -93,12 +114,18 @@ def initialisePowerSupply(resetFlag, numMeasurements, trigDelay):
     print(rm.list_resources())
     #Create a connection with the RS232 port listed when printing list_resources
     time.sleep(0.5)
-    instrument=rm.open_resource(u'ASRL/dev/ttyUSB0::INSTR')
+
+    systemName = platform.system()
+    if systemName == "Windows":
+        instrument=rm.open_resource(u'ASRL19::INSTR')
+    elif systemName == "Linux":
+        instrument=rm.open_resource(u'ASRL/dev/ttyUSB0::INSTR')
+
     instrument.baud_rate=9600
     instrument.write_termination = '\n'
     instrument.read_termination = '\n'
     if numMeasurements > 0:
-        instrument.timeout=np.max([100*numMeasurements+trigDelay,25])
+        instrument.timeout=np.max([1000*numMeasurements+trigDelay,25000])
     #Setup command character terminations - basically the settings so that the PC and instrument
     #recognise the end of a command - this is instrument dependent unfortunately and not always
     #clear as to what it should be set to.
@@ -123,11 +150,34 @@ def initialisePowerSupply(resetFlag, numMeasurements, trigDelay):
 
     return instrument
 
-def getVoltage(instrument):
-    instrument.write("INIT")
-    instrument.write("FORM:ELEM READ,TIME,VSO")
-    instrument.write("READ?")
-    return float(str(instrument.read()).replace('A','').split(',')[2])
+def checkFinished(vs):
+    vs.instrument.write("*OPC?")
+    opcResult = int(vs.instrument.read())
+    if opcResult != 1:
+        print("WARNING: OPC returned incomplete. Result:", opcResult, "\n\n")
+        return False
+    return True
+
+def getVoltage(vs, targetVoltage):
+    vs.instrument.write("INIT")
+    vs.instrument.write("FORM:ELEM READ,TIME,VSO")
+    vs.instrument.write("READ?")
+    result = float(str(vs.instrument.read()).replace('A','').split(',')[2])
+
+    if result < -600:
+        print("ERROR HAS OCCURRED: getVoltage result =", result)
+        errorAndExit()
+        # if targetVoltage > 0:
+        #     print("Attempt to ramp down and exit")
+        # elif targetVoltage < 0:
+        #     print("Attempt to ramp up and exit")
+        # else:
+            # targetVoltage == 0
+        # exit()
+    
+    checkFinished(vs)
+
+    return result
 
 def setVoltageRange(vs, targetVoltage):
     if(targetVoltage<10.0):
@@ -154,7 +204,8 @@ def runSetup(vs, targetVoltage, currentLimit, currentRange=None):
         vs.instrument.write("TRIG:DEL 0.0") #Trigger delay of 0;;; IT'S NOT WORKING!!
         vs.instrument.write("TRIG:COUN " + str(vs.numMeasurements)) #Trigger count of 25
         vs.instrument.write("NPLC .01")
-        vs.instrument.write("RANG " + currentRange) #Current range of 2 uA
+        if currentRange is not None:
+            vs.instrument.write("RANG " + currentRange) #Current range of 2 uA
         vs.instrument.write("AVER:COUN 100") #100 point averaged filter
         vs.instrument.write("AVER:TCON REP") #Repeating filter
         vs.instrument.write("AVER:ON") #Turn filter on
@@ -170,7 +221,7 @@ def runSetup(vs, targetVoltage, currentLimit, currentRange=None):
     # --------------------------------------------------------------------------
 
 def rampDown(vs, targetVoltage, measure):
-    voltageRead = getVoltage(vs.instrument)
+    voltageRead = getVoltage(vs, targetVoltage)
 
     data = [[], [], []]
 
@@ -201,7 +252,7 @@ def rampDown(vs, targetVoltage, measure):
         else:
             time.sleep(2)
 
-        voltageRead = getVoltage(vs.instrument)
+        voltageRead = getVoltage(vs, targetVoltage)
     
     print("")
 
@@ -209,7 +260,7 @@ def rampDown(vs, targetVoltage, measure):
         return data
 
 def rampUp(vs, targetVoltage, measure):
-    voltageRead = getVoltage(vs.instrument)
+    voltageRead = getVoltage(vs, targetVoltage)
 
     data = [[], [], []]
 
@@ -240,7 +291,7 @@ def rampUp(vs, targetVoltage, measure):
         else:
             time.sleep(2)
             
-        voltageRead = getVoltage(vs.instrument)
+        voltageRead = getVoltage(vs, targetVoltage)
     
     print("")
 
@@ -263,7 +314,7 @@ def rampVoltage(vs, targetVoltage, measure=0):
         vs.instrument.write("AVER:COUN 1")
         vs.instrument.write("AVER:OFF")
 
-    voltageRead = getVoltage(vs.instrument)
+    voltageRead = getVoltage(vs, targetVoltage)
 
     if (voltageRead < targetVoltage):
         return rampUp(vs, targetVoltage, measure)
@@ -306,8 +357,7 @@ def takeMeasurement(vs):
     vs.instrument.write("TRAC:FEED:CONT NEXT") #I think this is for feeding measurements in one after the other
     vs.instrument.write("STAT:MEAS:ENAB 512")
     vs.instrument.write("*SRE 1")
-    vs.instrument.write("*OPC?") #Check if ready
-    vs.instrument.read() #Important to read this check otherwise this will be read into measurement array and the measurements will be read in the next iteration
+    checkFinished(vs)
     vs.instrument.write("INIT") #Start measurements
     vs.instrument.write("DISP:ENAB ON") #Turn display back on
     vs.instrument.write("TRAC:DATA?") #Request all stored readings
@@ -323,7 +373,11 @@ def takeMeasurement(vs):
     TArray = RArray[1::3]#Extract buffer timestamps
     VArray = RArray[2::3]#Read voltage source data (not needed so might take this out to improve read speeds)
 
-    print("\nMean Voltage: {:.2e}\nMean Current: {:.2e}\n".format(np.mean(VArray),np.mean(CArray)))
+    print("\nMean Voltage: {:.2e} +- {:.2e}".format(np.mean(VArray), np.std(VArray)))
+    print("Mean Current: {:.2e} +- {:.2e}".format(np.mean(CArray), np.std(CArray)))
+    print("Mean Resistance: {:.2e} +- {:.2e}\n".format(np.mean(VArray/CArray), np.std(VArray/CArray)))
+
+    plt.figure() ; plt.scatter(TArray, CArray) ; plt.xlabel("Time (s)") ; plt.ylabel("Current (A)") ; plt.title("Current vs Time") ; plt.show()
     
     return CArray, TArray, VArray
 
@@ -332,11 +386,22 @@ def plotData(data):
 
     c, t, v = data
 
-    plt.errorbar(np.mean(v,axis=2), np.mean(c,axis=2), yerr = np.std(c,axis=2))
+    print(np.shape(c), np.shape(t), np.shape(v))
 
-    plt.show()
+    plt.errorbar(np.mean(v,axis=1), np.mean(c,axis=1), yerr = np.std(c,axis=1), fmt='o')
+    # plt.errorbar(np.mean(v,axis=2), np.mean(c,axis=2), yerr = np.std(c,axis=2))
+
+    # plt.show()
 
     return
+
+def saveToFile(data, fileName, directory):
+
+    datanp = np.array(data,dtype=np.float64)
+    np.save(directory + fileName + ".npy", datanp)
+    # np.savetxt(directory + fileName + ".csv", datanp, delimiter=",") # convert to 2d array
+    # with open(directory + fileName + ".npy", "wb") as f:
+    #     np.save(f, datanp)
 
 def main(args, currentLimitStr, currentRangeStr):
 
@@ -379,15 +444,13 @@ def main(args, currentLimitStr, currentRangeStr):
 
     if vs.ivCheck:
         data = rampVoltage(vs, targetVoltage, 1)
+        plotData(data)
+        saveToFile(data, fileName, directory)
+        inputVoltage = 0
     else:
         rampVoltage(vs, targetVoltage)
+        inputVoltage = float(input("Enter next voltage:\n"))
 
-    if vs.ivCheck:
-        with open(directory + fileName + ".npy", "wb") as f:
-            datanp = np.array(data,dtype=np.float64)
-            np.save(f, datanp)
-
-    inputVoltage = float(input("Enter next voltage:\n"))
     while inputVoltage > 0:
         try:
             if inputVoltage > 500:
@@ -417,20 +480,7 @@ def main(args, currentLimitStr, currentRangeStr):
         vs.instrument.write("*RST") # Reset all parameters now that safely ramped down
     except:
         print("\nUnexpected error occurred while ramping to 0!!")
-        print("Please ramp down the device manually")
-        print("    To do so, press the \"Config/Local\" button and then use the")
-        print("    up and down arrow buttons in the \"V-SOURCE\" box, with gray")
-        print("    body colour and a white triangular arrow.")
-        print("")
-        print("    Change which digit to increment with the left and right arrow")
-        print("    buttons directly below them, with white body colour and gray")
-        print("    arrows.")
-        print("")
-        print("    Once safely ramped down, press the \"OPER\" button to switch")
-        print("    the voltage off.")
-        print("")
-        print("    DO NOT USE THE PURE WHITE \"RANGE\" BUTTONS!!!")
-        exit()
+        errorAndExit()
 
     
 if __name__ == "__main__":
@@ -439,8 +489,10 @@ if __name__ == "__main__":
     # Fixed Parameters
 
     currentRangeStr = "2e-3" # 2 mA # Applicable to combined MPPCs
-    # currentRangeStr = "2e-2" # 20 mA # Applicable to LEDs
     currentLimitStr = "2.5e-4"
+    
+    # currentRangeStr = "2e-2" 
+    # currentLimitStr = "2e-2" #testing with 50Ohm terminator for 5V
     ############################################################################
 
     args = grabArgs()
