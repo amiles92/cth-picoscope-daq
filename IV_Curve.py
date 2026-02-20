@@ -541,12 +541,11 @@ def saveToFile(data, fileName, directory):
     datanp = np.array(data,dtype=np.float64)
     np.save(directory + fileName + ".npy", datanp)
 
+    shapeStr = ",".join(map(str, datanp.shape))
     dataForCsv = np.reshape(datanp, (3, -1)).T
-    np.savetxt(directory + fileName + ".csv", dataForCsv, delimiter=",", 
-               header="%i\nCurrent (A), Time (s), Voltage (V)" % dataForCsv.shape[0], comments="")
-    # np.savetxt(directory + fileName + ".csv", datanp, delimiter=",") # convert to 2d array
-    # with open(directory + fileName + ".npy", "wb") as f:
-    #     np.save(f, datanp)
+    np.savetxt("test.csv", dataForCsv, delimiter=",", comments="",
+        header="%s\nCurrent (A), Time (s), Voltage (V)" % shapeStr)
+    return
 
 def main(args, currentLimitStr, currentRangeStr):
 
