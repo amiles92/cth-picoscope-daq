@@ -45,6 +45,10 @@ g_log = logLevels.INFO
 
 g_hardVLimit = 88
 
+g_minSleep = 2.0
+
+g_jumpSleep = 10.0
+
 g_unixTimestamp = int(time.time())
 
 np.seterr(divide='ignore')
@@ -161,14 +165,16 @@ def grabArgs():
     
     ivArgs.add_argument('-I', dest='radSettings', action="extend", nargs=3, type=str, 
                         metavar=('<mppc-id>', '<connector-number>', '<temperature>'),
-                        help='For taking the IV Curve for the neutron irradiation test, N arguments are required\n'
+                        help='For taking the IV Curve for the neutron irradiation test, 3 arguments are required\n'
                             '  ID of the MPPC being measured, ignore the NR, just 1-10 is fine\n'
                             '  Number of the connector on the MPPC, labelled on the board as J[1-4], also ignore the J\n'
                             '  Temperature set on the chiller during the test in degC, just the number')
 
     parser.add_argument('-j', dest='jumpTarget', type=float, metavar='<jump-voltage>',
                         help='Set a SAFE voltage to jump to/from (volts .1f)')
-
+    
+    parser.add_argument('-s', dest='minSleep', type=float, metavar='<min-sleep>',
+                        help='Minimum time to sleep between voltage jumps (seconds .1f)')
 
     if len(sys.argv)==1:
         parser.print_help()
@@ -190,6 +196,10 @@ def grabArgs():
 
         if not temperature.isdigit():
             warning("Temperature should be an integer, got:", temperature)
+        
+        info("MPPC ID:", mppcId)
+        info("Connector number:", connectorNum)
+        info("Temperature during test:", temperature, "degC")
 
         fileName = "MPPC{}_J{}_{}degC_{}".format(mppcId, connectorNum, temperature, g_unixTimestamp)  #args['radSettings'][0], args['radSettings'][1], args['radSettings'][2])
         args['ivSettings'] = [fileName, 3, 1.5]
@@ -199,6 +209,10 @@ def grabArgs():
             args['ivSettings'] = [args['ivSettings'][0], int(args['ivSettings'][1]), float(args['ivSettings'][2])]
         except:
             parser.exit(message="Invalid value for IV Curve settings (str, int, float): %s\n" % ", ".join(args['ivSettings']))
+    
+    if (args['minSleep'] is not None):
+        g_minSleep = args['minSleep']
+        debug("Minimum sleep time between voltage jumps set to", g_minSleep, "seconds")
     
     return args
 
@@ -309,15 +323,12 @@ def setVoltage(vs, newVoltage):
 
 def getVoltage(vs):
     debug("beginning getVoltage")
-    # vs.instrument.write("INIT") # this does nothing
-    vs.instrument.write("FORM:ELEM READ,TIME,VSO")
+    # vs.instrument.write("FORM:ELEM READ,TIME,VSO")
     vs.instrument.write("TRAC:CLE")
-    vs.instrument.write("SYST:AZER OFF") # disable autozero to speed up measurements
     vs.instrument.write("READ?")
 
     rawResult = str(vs.instrument.read())
     result = float(rawResult.replace('A','').split(',')[2])
-    vs.instrument.write("SYST:AZER ON")
 
     vs.instrument.write("TRAC:CLE") # Clear buffer
 
@@ -352,13 +363,10 @@ def takeMeasurement(vs):
         time.sleep(vs.trigDelay)
     debug("takeMeasurement: delay done")
     t0 = time.time()
-    # vs.instrument.write("TRAC:POIN " + str(vs.numMeasurements)) #buffer expects 'n=measPoints' measurements
 
-    vs.instrument.write("SYST:AZER OFF") # disable autozero to speed up measurements
     vs.instrument.write("READ?")
 
     rawResult = str(vs.instrument.read())
-    vs.instrument.write("SYST:AZER ON")
 
     tDone = time.time()
     results = (rawResult.replace("A","")).split(',') #Read and format results
@@ -371,8 +379,8 @@ def takeMeasurement(vs):
     checkFinished(vs)
 
     diff = time.time() - start
-    if diff < 2: # Makes sure we take at least two seconds between V jumps, to save MPPCs
-        time.sleep(2 - diff)
+    if diff < g_minSleep: # Makes sure we take at least two seconds between V jumps, to save MPPCs
+        time.sleep(g_minSleep - diff)
 
     CArray = RArray[0::3]#Extract current measurements
     TArray = RArray[1::3]#Extract buffer timestamps
@@ -402,12 +410,9 @@ def runSetup(vs, targetVoltage, currentLimit, currentRange="2e-2"):
     vs.instrument.write("RANG " + currentRange)
     vs.instrument.write("FORM:ELEM READ,TIME,VSO")#Read current, timestamp, voltage
     vs.instrument.write("TRIG:DEL 0.0") #Trigger delay of 0;;; IT'S NOT WORKING!!
-    # vs.instrument.write("TRIG:COUN " + str(vs.numMeasurements)) #Trigger count of 25 # REDUNDANT
-    vs.instrument.write("NPLC .1") # Set integration time to 0.01 power line cycles (PLC) for faster measurements (default is 1 PLC, which is 0.02 seconds at 50 Hz)
-    # vs.instrument.write("AVER:COUN 10") #100 point averaged filter
+    vs.instrument.write("NPLC 1") # power line cycles per measurement
     vs.instrument.write("AVER:TCON REP") #Repeating filter
-    # vs.instrument.write("AVER ON") #Turn filter on
-    
+    vs.instrument.write("SYST:AZER OFF") # disable autozero to speed up measurements
 
     vs.instrument.write("STAT:MEAS:ENAB 512")
     vs.instrument.write("*SRE 1")
@@ -457,7 +462,7 @@ def rampDown(vs, targetVoltage, measure):
                 data[i].append(measurement[i])
             voltageRead = vs.currentVoltage
         else:
-            time.sleep(2)
+            time.sleep(g_minSleep)
             voltageRead = getVoltage(vs)
 
     if measure:
@@ -498,7 +503,7 @@ def rampUp(vs, targetVoltage, measure):
                 data[i].append(measurement[i])
                 voltageRead = vs.currentVoltage
         else:
-            time.sleep(2)
+            time.sleep(g_minSleep)
             voltageRead = getVoltage(vs)
 
     if measure:
@@ -551,7 +556,7 @@ def jumpVoltage(vs, targetVoltage):
 
     setVoltage(vs, targetVoltage)
 
-    time.sleep(5)
+    time.sleep(g_jumpSleep)
     return
 
 def plotData(data):
@@ -639,10 +644,6 @@ def main(args, currentLimitStr, currentRangeStr):
         rampVoltage(vs, 0, 0)
         vs.instrument.write("*RST") # reset now that Voltage is definitely 0
 
-    # if vs.ivCheck:
-    #     runSetup(vs, targetVoltage, currentLimitStr)
-    # else:   
-    #     runSetup(vs, targetVoltage, currentLimitStr, currentRangeStr)
     runSetup(vs, targetVoltage, currentLimitStr, currentRangeStr)
 
     if jump:
@@ -651,10 +652,10 @@ def main(args, currentLimitStr, currentRangeStr):
     if vs.ivCheck:
         data = rampVoltage(vs, targetVoltage, 1)
         saveToFile(data, fileName, directory)
-        # try:
-        plotData(data)
-        # except:
-        #     warning("Plotting failed, continuing anyways")
+        try:
+            plotData(data)
+        except:
+            warning("Plotting failed, continuing anyways")
         inputVoltage = 0
     else:
         rampVoltage(vs, targetVoltage)
@@ -698,27 +699,6 @@ def runZeroCheck(vs):
     vs.instrument.write("SYST:ZCOR ON")
     vs.instrument.write("SYST:ZCH OFF")
 
-
-
-    """ - Manual -
-    vs.instrument.write("SYST:ZCH ON")
-    vs.instrument.write("INIT")
-    vs.instrument.write("SYST:ZCOR:STAT OFF")
-    vs.instrument.write("SYST:ZCOR:ACQ")
-    vs.instrument.write("SYST:ZCOR ON")
-    vs.instrument.write("CURR:RANG:AUTO ON")
-    vs.instrument.write("SYST:ZCH OFF")
-    vs.instrument.write("READ?")
-    """
-
-    """ - Take measurement -
-    vs.instrument.write("TRIG:COUN " + str(vs.numMeasurements))
-    vs.instrument.write("TRAC:POIN " + str(vs.numMeasurements))
-    vs.instrument.write("TRAC:CLE")
-    vs.instrument.write("AVER:COUN 10")
-    vs.instrument.write("AVER ON")
-    """
-
     return
 
     
@@ -742,13 +722,6 @@ if __name__ == "__main__":
     args = grabArgs()
 
     t0 = time.time()
-
-    if args['radSettings'] is not None:
-        mppcID, connectorNum, temperature = args['radSettings']
-        info("MPPC ID:", mppcID)
-        info("Connector number:", connectorNum)
-        info("Temperature during test: {} degC".format(temperature))
-
 
     main(args, currentLimitStr, currentRangeStr)
 
