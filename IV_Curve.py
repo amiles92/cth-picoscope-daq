@@ -39,11 +39,17 @@ class logLevels(Enum):
             return self.value < other.value
         return NotImplemented
 
+##### Start: Misc global vars
+
 g_log = logLevels.INFO
 
 g_hardVLimit = 88
 
+g_unixTimestamp = int(time.time())
+
 np.seterr(divide='ignore')
+
+##### End: Misc global vars
 
 def debug(*args):
     if g_log <= logLevels.DEBUG:
@@ -121,37 +127,46 @@ def grabArgs():
 
     usage = 'python3 RS232_IV_Curve.py [-h] <voltage-level> <voltage-increment> ' + \
         '<threshold-voltage> <threshold-increment> [-i <file-basename> ' + \
-        '<num-measurements> <trigger-delay>] [-j <jump-voltage>] [--no-reset]'
+        '<num-measurements> <trigger-delay>] [-j <jump-voltage>] [--no-reset]' + \
+        '[--irradiation'# <file-basename> <num-measurements> <trigger-delay>]'
 
     parser = argparse.ArgumentParser(prog="VoltageControl_RS232",
                                         description='Monash slowcontrol system for Keithley 6487 power supply',
-                                        usage=usage,
+                                        #usage=usage,
                                         formatter_class=argparse.RawTextHelpFormatter)
 
-    parser.add_argument('targetVoltage', type=float, metavar='voltage-level',
+    parser.add_argument('targetVoltage', type=float, metavar='<voltage-level>',
                     help='Voltage Level Required (volts .1f)')
 
-    parser.add_argument('normIncrement', type=float, metavar='voltage-increment',
+    parser.add_argument('normIncrement', type=float, metavar='<voltage-increment>',
                         help='Voltage Increment Before Threshold Voltage (volts .1f)')
 
-    parser.add_argument('threshVoltage', type=float, metavar='threshold-voltage',
+    parser.add_argument('threshVoltage', type=float, metavar='<threshold-voltage>',
                         help='Threshold Voltage (volts .1f)')
 
-    parser.add_argument('threshIncrement', type=float, metavar='threshold-increment',
+    parser.add_argument('threshIncrement', type=float, metavar='<threshold-increment>',
                         help='Voltage Increment After Threshold Voltage (volts .1f)')
 
     parser.add_argument('--no-reset', dest='reset', action='store_false',
-                            help='Stop reset flag being sent to the hardware. Mostly to be used\n'
-                                '  when the connection was previously severed unexpectedly')
+                            help='Stop reset flag being sent to the hardware and attempt to ramp to 0V\n'
+                                '  Mostly to be used when the connection was previously severed unexpectedly')
 
-    parser.add_argument('-i', dest='ivSettings', action="extend", nargs=3, type=str, 
-                        metavar=('file-basename', 'num-measurements', 'trigger-delay'),
+    ivArgs = parser.add_mutually_exclusive_group()
+    ivArgs.add_argument('-i', dest='ivSettings', action="extend", nargs=3, type=str, 
+                        metavar=('<file-basename>', '<num-measurements>', '<trigger-delay>'),
                         help='For taking the IV Curve, three arguments are required\n'
                             '  Base file name for saving data to\n'
                             '  Number of current measurements at each voltage (int)\n'
                             '  Trigger delay between measurements (seconds .1f)')
+    
+    ivArgs.add_argument('-I', dest='radSettings', action="extend", nargs=3, type=str, 
+                        metavar=('<mppc-id>', '<connector-number>', '<temperature>'),
+                        help='For taking the IV Curve for the neutron irradiation test, N arguments are required\n'
+                            '  ID of the MPPC being measured, ignore the NR, just 1-10 is fine\n'
+                            '  Number of the connector on the MPPC, labelled on the board as J[1-4], also ignore the J\n'
+                            '  Temperature set on the chiller during the test in degC, just the number')
 
-    parser.add_argument('-j', dest='jumpTarget', type=float, metavar='jump-voltage',
+    parser.add_argument('-j', dest='jumpTarget', type=float, metavar='<jump-voltage>',
                         help='Set a SAFE voltage to jump to/from (volts .1f)')
 
 
@@ -161,7 +176,25 @@ def grabArgs():
 
     args = vars(parser.parse_args())
 
-    if (args['ivSettings'] != None):
+    if (args['radSettings'] is not None):
+        mppcId, connectorNum, temperature = args['radSettings']
+        # connectorNum = args['radSettings'][1]
+        # temperature = args['radSettings'][2]
+
+        if mppcId.isdigit() and not (1 <= int(mppcId) <= 10):
+            warning("MPPC ID should be an integer from 1-10, got:", mppcId)
+        if connectorNum.isdigit() and not (1 <= int(connectorNum) <= 4):
+            warning("Connector number should be an integer from 1-4, got:", connectorNum)
+            if len(connectorNum.replace("J","")) > 0: 
+                connectorNum = connectorNum.replace("J","")
+
+        if not temperature.isdigit():
+            warning("Temperature should be an integer, got:", temperature)
+
+        fileName = "MPPC{}_J{}_{}degC_{}".format(mppcId, connectorNum, temperature, g_unixTimestamp)  #args['radSettings'][0], args['radSettings'][1], args['radSettings'][2])
+        args['ivSettings'] = [fileName, 3, 1.5]
+
+    elif (args['ivSettings'] is not None):
         try:
             args['ivSettings'] = [args['ivSettings'][0], int(args['ivSettings'][1]), float(args['ivSettings'][2])]
         except:
@@ -522,17 +555,45 @@ def jumpVoltage(vs, targetVoltage):
     return
 
 def plotData(data):
-    plt.figure()
 
     c, t, v = data
 
     debug("c, t, v shapes:", np.shape(c), np.shape(t), np.shape(v))
 
-    plt.errorbar(np.mean(v,axis=1), np.mean(c,axis=1), yerr = np.std(c,axis=1), fmt='o')
-    # plt.errorbar(np.mean(v,axis=2), np.mean(c,axis=2), yerr = np.std(c,axis=2))
 
-    # plt.show(block=False)
-    plt.pause(1.0)
+    cMeans = np.mean(c, axis=1)
+    vMeans = np.mean(v, axis=1)
+
+    vDeriv = (vMeans[1:] + vMeans[:-1]) / 2
+    cDiff = np.diff(cMeans)
+    lineM = (cDiff[-1] - cDiff[0]) / (vDeriv[-1] - vDeriv[0])
+    lineC = cDiff[0] - lineM * vDeriv[0]
+    cKite = lineM * vDeriv - cDiff + lineC
+    maxKiteArg = np.argmax(cKite)
+
+    maxKite = cKite[maxKiteArg]
+    maxdIdV = cDiff[maxKiteArg]
+    breakdownVoltage = vDeriv[maxKiteArg]
+
+    fig, (axRaw, axDeriv) = plt.subplots(2, 1, sharex=True, figsize=(8, 6))
+
+    fig.suptitle("IV Curve")
+
+    axRaw.errorbar(np.mean(v,axis=1), np.mean(c,axis=1), yerr = np.std(c,axis=1), fmt='o')
+    axRaw.set_ylabel("Current (A)")
+    axRaw.grid()
+
+    axDeriv.errorbar(vDeriv, cDiff, fmt='o')
+    axDeriv.plot(vDeriv, lineM * vDeriv + lineC)
+    axDeriv.errorbar(vDeriv, cKite, fmt='o')
+    axDeriv.errorbar(breakdownVoltage, maxdIdV, fmt='o', color="red")
+    axDeriv.errorbar(breakdownVoltage, maxKite, fmt='o', color="red")
+    axDeriv.set_ylabel("dI/dV (A/V)")
+    axDeriv.grid()
+
+    axDeriv.set_xlabel("Voltage (V)")
+
+    plt.pause(3.0)
 
     return
 
@@ -543,8 +604,8 @@ def saveToFile(data, fileName, directory):
 
     shapeStr = ",".join(map(str, datanp.shape))
     dataForCsv = np.reshape(datanp, (3, -1)).T
-    np.savetxt("test.csv", dataForCsv, delimiter=",", comments="",
-        header="%s\nCurrent (A), Time (s), Voltage (V)" % shapeStr)
+    np.savetxt(directory + fileName + ".csv", dataForCsv, delimiter=",", comments="",
+        header="%s\n%s\n%i\nCurrent (A), Time (s), Voltage (V)" % (shapeStr, fileName, g_unixTimestamp))
     return
 
 def main(args, currentLimitStr, currentRangeStr):
@@ -590,10 +651,10 @@ def main(args, currentLimitStr, currentRangeStr):
     if vs.ivCheck:
         data = rampVoltage(vs, targetVoltage, 1)
         saveToFile(data, fileName, directory)
-        try:
-            plotData(data)
-        except:
-            warning("Plotting failed, continuing anyways")
+        # try:
+        plotData(data)
+        # except:
+        #     warning("Plotting failed, continuing anyways")
         inputVoltage = 0
     else:
         rampVoltage(vs, targetVoltage)
@@ -681,6 +742,13 @@ if __name__ == "__main__":
     args = grabArgs()
 
     t0 = time.time()
+
+    if args['radSettings'] is not None:
+        mppcID, connectorNum, temperature = args['radSettings']
+        info("MPPC ID:", mppcID)
+        info("Connector number:", connectorNum)
+        info("Temperature during test: {} degC".format(temperature))
+
 
     main(args, currentLimitStr, currentRangeStr)
 
