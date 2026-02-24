@@ -29,11 +29,12 @@ plt.ion()
 
 @total_ordering
 class logLevels(Enum):
-    DEBUG = 0
-    INFO = 1
-    WARNING = 2
-    ERROR = 3
-    # FATAL = 4 # Can't be disabled
+    PROFILE = 0
+    DEBUG = 1
+    INFO = 2
+    WARNING = 3
+    ERROR = 4
+    # FATAL = 5 # Can't be disabled
     def __lt__(self, other):
         if self.__class__ is other.__class__:
             return self.value < other.value
@@ -44,16 +45,26 @@ class logLevels(Enum):
 g_log = logLevels.INFO
 
 g_hardVLimit = 88
+g_softILimit = 2e-2
+g_ILimitHit = False
 
 g_minSleep = 2.0
-
 g_jumpSleep = 10.0
 
-g_unixTimestamp = int(time.time())
+g_timeInit = time.time()
+g_unixTimestamp = int(g_timeInit)
+
+g_ivIrradNumMeasurements = 3
+g_ivIrradDelay = 0.2
 
 np.seterr(divide='ignore')
 
 ##### End: Misc global vars
+
+def profile(*args, t0=g_timeInit):
+    if g_log <= logLevels.PROFILE:
+        tDelta = time.time() - t0
+        print("PROFILE - t =", round(tDelta, 2),  *args)
 
 def debug(*args):
     if g_log <= logLevels.DEBUG:
@@ -184,8 +195,6 @@ def grabArgs():
 
     if (args['radSettings'] is not None):
         mppcId, connectorNum, temperature = args['radSettings']
-        # connectorNum = args['radSettings'][1]
-        # temperature = args['radSettings'][2]
 
         if mppcId.isdigit() and not (1 <= int(mppcId) <= 10):
             warning("MPPC ID should be an integer from 1-10, got:", mppcId)
@@ -202,7 +211,11 @@ def grabArgs():
         info("Temperature during test:", temperature, "degC")
 
         fileName = "MPPC{}_J{}_{}degC_{}".format(mppcId, connectorNum, temperature, g_unixTimestamp)  #args['radSettings'][0], args['radSettings'][1], args['radSettings'][2])
-        args['ivSettings'] = [fileName, 3, 1.5]
+        args['ivSettings'] = [fileName, g_ivIrradNumMeasurements, g_ivIrradDelay]
+        args['minSleep'] = g_ivIrradDelay
+
+        global g_softILimit
+        g_softILimit = 3e-7
 
     elif (args['ivSettings'] is not None):
         try:
@@ -211,6 +224,7 @@ def grabArgs():
             parser.exit(message="Invalid value for IV Curve settings (str, int, float): %s\n" % ", ".join(args['ivSettings']))
     
     if (args['minSleep'] is not None):
+        global g_minSleep
         g_minSleep = args['minSleep']
         debug("Minimum sleep time between voltage jumps set to", g_minSleep, "seconds")
     
@@ -322,7 +336,8 @@ def setVoltage(vs, newVoltage):
     return
 
 def getVoltage(vs):
-    debug("beginning getVoltage")
+    profile("beginning getVoltage")
+    start = time.time()
     # vs.instrument.write("FORM:ELEM READ,TIME,VSO")
     vs.instrument.write("TRAC:CLE")
     vs.instrument.write("READ?")
@@ -355,32 +370,40 @@ def getVoltage(vs):
 
     vs.currentVoltage = result # update current voltage to be used in error exiting
 
+    profile("finished getVoltage", t0=start)
+
     return result
 
 def takeMeasurement(vs):
+    profile("takeMeasurement begins")
     start = time.time()
     if vs.trigDelay > 0:
         time.sleep(vs.trigDelay)
-    debug("takeMeasurement: delay done")
+    profile("takeMeasurement: delay done", t0=start)
     t0 = time.time()
 
     vs.instrument.write("READ?")
 
     rawResult = str(vs.instrument.read())
 
+    profile("takeMeasurement: read done", t0=start)
+
     tDone = time.time()
     results = (rawResult.replace("A","")).split(',') #Read and format results
     RArray = (np.array(results)).astype(np.float64) #Convert results to float array
 
     debug("takeMeasurement raw res:", rawResult)
-    debug("takeMeasurement took {:.2f} seconds".format(tDone - t0))
+    profile("takeMeasurement: processed results", t0=start)
 
     vs.instrument.write("TRAC:CLE") # Clear buffer
     checkFinished(vs)
 
+    profile("takeMeasurement: cleared buffer and ran checkFinished", t0=start)
+
     diff = time.time() - start
-    if diff < g_minSleep: # Makes sure we take at least two seconds between V jumps, to save MPPCs
+    if diff < g_minSleep: # Makes sure we take at least g_minSleep seconds between V jumps, to save MPPCs
         time.sleep(g_minSleep - diff)
+        profile("takeMeasurement: we slept...", t0=start)
 
     CArray = RArray[0::3]#Extract current measurements
     TArray = RArray[1::3]#Extract buffer timestamps
@@ -395,9 +418,14 @@ def takeMeasurement(vs):
     info("Mean Current: {:.2e} +- {:.2e}".format(cMean, cStd))
     info("Mean Resistance: {:.2e} +- {:.2e}\n".format(rMean, rStd))
 
-    # plt.figure() ; plt.scatter(TArray, CArray) ; plt.xlabel("Time (s)") ; plt.ylabel("Current (A)") ; plt.title("Current vs Time") ; plt.show()
+    if cMean > g_softILimit:
+        warning("Soft current limit hit, early exiting rampVoltage")
+        global g_ILimitHit
+        g_ILimitHit = True
 
     vs.currentVoltage = VArray[-1]
+
+    profile("takeMeasurement: processing done", t0=start)
     
     return CArray, TArray, VArray
 
@@ -410,7 +438,7 @@ def runSetup(vs, targetVoltage, currentLimit, currentRange="2e-2"):
     vs.instrument.write("RANG " + currentRange)
     vs.instrument.write("FORM:ELEM READ,TIME,VSO")#Read current, timestamp, voltage
     vs.instrument.write("TRIG:DEL 0.0") #Trigger delay of 0;;; IT'S NOT WORKING!!
-    vs.instrument.write("NPLC 1") # power line cycles per measurement
+    vs.instrument.write("NPLC 0.2") # power line cycles per measurement
     vs.instrument.write("AVER:TCON REP") #Repeating filter
     vs.instrument.write("SYST:AZER OFF") # disable autozero to speed up measurements
 
@@ -428,6 +456,7 @@ def runSetup(vs, targetVoltage, currentLimit, currentRange="2e-2"):
     # --------------------------------------------------------------------------
 
 def rampDown(vs, targetVoltage, measure):
+    global g_ILimitHit
     if vs.currentVoltage is not None:
         debug("rampDown: using existing voltage")
         voltageRead = vs.currentVoltage  
@@ -443,6 +472,10 @@ def rampDown(vs, targetVoltage, measure):
             data[i].append(measurement[i])
 
     while (voltageRead > targetVoltage):
+        if g_ILimitHit == True:
+            g_ILimitHit = False
+            break
+
         newVoltage = voltageRead
         if (voltageRead > vs.threshVoltage):
             newVoltage = voltageRead - vs.threshIncrement
@@ -469,6 +502,7 @@ def rampDown(vs, targetVoltage, measure):
         return data
 
 def rampUp(vs, targetVoltage, measure):
+    global g_ILimitHit
     if vs.currentVoltage is not None:
         debug("rampUp: using existing voltage")
         voltageRead = vs.currentVoltage  
@@ -484,6 +518,10 @@ def rampUp(vs, targetVoltage, measure):
             data[i].append(measurement[i])
 
     while (voltageRead < targetVoltage):
+        if g_ILimitHit == True:
+            g_ILimitHit = False
+            break
+
         newVoltage = voltageRead
         if (voltageRead < vs.threshVoltage):
             newVoltage = voltageRead + vs.normIncrement 
@@ -598,7 +636,7 @@ def plotData(data):
 
     axDeriv.set_xlabel("Voltage (V)")
 
-    plt.pause(3.0)
+    plt.pause(1.0)
 
     return
 
@@ -704,7 +742,7 @@ def runZeroCheck(vs):
     
 if __name__ == "__main__":
 
-    g_log = logLevels.INFO
+    g_log = logLevels.DEBUG
 
     ############################################################################
     # Fixed Parameters
